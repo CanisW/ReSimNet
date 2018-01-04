@@ -13,6 +13,7 @@ class DrugDataset(object):
     def __init__(self, data_path):
         self.initial_setting()
         self.key_set = self.process_data(data_path)
+        self.dataset = self.load_pairs(self.key_set)
 
     def initial_setting(self):
         # Dataset split into train/valid/test
@@ -82,33 +83,38 @@ class DrugDataset(object):
         print('Dataset size {}\n'.format(len(key_set)))
 
         return np.array(key_set)
+    
+    def load_pairs(self, key_set):
+        raise NotImplementedError
 
     def loader(self, batch_size=16, maxlen=None):
         if maxlen is None: 
             maxlen = float("inf")
 
-        for idx in range(0, 100):
-            batch_key1 = []
-            batch_key1a = []
-            batch_key1b = []
-            batch_key2 = []
-            batch_key2a = []
-            batch_key2b = []
-            batch_sim = []
+        batch_key1 = []
+        batch_key1a = []
+        batch_key1b = []
+        batch_key2 = []
+        batch_key2a = []
+        batch_key2b = []
+        batch_sim = []
 
-            for _ in range(batch_size):
-                key_idxs = random.sample(range(len(self.key_set)), 2)
-                key1, key2 = self.key_set[key_idxs, :]
-                batch_key1.append(key1[0])
-                batch_key1a.append(key1[1])
-                batch_key1b.append(key1[2])
-                batch_key2.append(key2[0])
-                batch_key2a.append(key2[1])
-                batch_key2b.append(key2[2])
-                batch_sim.append(np.random.uniform(-1, 1, size=1))
+        for idx in range(0, self.dataset_len):
+            key_idxs = random.sample(range(len(self.key_set)), 2)
+            key1, key2 = self.key_set[key_idxs, :]
+            batch_key1.append(key1[0])
+            batch_key1a.append(key1[1])
+            batch_key1b.append(key1[2])
+            batch_key2.append(key2[0])
+            batch_key2a.append(key2[1])
+            batch_key2b.append(key2[2])
+            batch_sim.append(np.random.uniform(-1, 1, size=1))
 
-            yield (batch_key1, batch_key1a, batch_key1b,
-                    batch_key2, batch_key2a, batch_key2b, batch_sim)
+            if len(batch_key1) == batch_size:
+                yield (batch_key1, batch_key1a, batch_key1b, batch_key2, 
+                       batch_key2a, batch_key2b, batch_sim)
+                del (batch_key1[:], batch_key1a[:], batch_key1b[:], 
+                     batch_key2[:], batch_key2a[:], batch_key2b[:], batch_sim[:])
 
     def shuffle_data(self):
         d = self.dataset[self._mode]
@@ -133,7 +139,12 @@ class DrugDataset(object):
 
     @property
     def dataset_len(self):
-        return len(self.dataset[self._mode][0])
+        if self._mode == 'tr':
+            return 16*1000
+        elif self._mode == 'va':
+            return 16*100
+        elif self._mode == 'te':
+            return 16*100
 
 
 """
@@ -151,7 +162,7 @@ if __name__ == '__main__':
 
     # Dataset configuration 
     data_path = './data/drug/inchikey_info.csv'
-    save_preprocess = False
+    save_preprocess = True
     save_path = './data/drug/drug(tmp).pkl'
     load_path = './data/drug/drug(tmp).pkl'
 

@@ -38,9 +38,9 @@ argparser.add_argument('--resume', action='store_true', default=False)
 argparser.add_argument('--debug', action='store_true', default=False)
 
 # train config
-argparser.add_argument('--batch_size', type=int, default=1)
+argparser.add_argument('--batch_size', type=int, default=8)
 argparser.add_argument('--epoch', type=int, default=10)
-argparser.add_argument('--learning_rate', type=float, default=1e-4)
+argparser.add_argument('--learning_rate', type=float, default=1e-3)
 argparser.add_argument('--weight_decay', type=float, default=0)
 argparser.add_argument('--grad_max_norm', type=int, default=10)
 argparser.add_argument('--grad_clip', type=int, default=10)
@@ -48,6 +48,7 @@ argparser.add_argument('--grad_clip', type=int, default=10)
 # model config
 argparser.add_argument('--lstm_dim', type=int, default=80)
 argparser.add_argument('--lstm_layer', type=int, default=1)
+argparser.add_argument('--char_embed_dim', type=int, default=15)
 argparser.add_argument('--key_embed_dim', type=int, default=50)
 argparser.add_argument('--seed', type=int, default=1000)
 
@@ -106,9 +107,10 @@ def get_run_fn(task_type):
 
 def get_model(args, dataset):
     if args.task_type == 'drug':
-        model = DrugModel(args.key_embed_dim, 1,
-                          args.lstm_dim,
+        model = DrugModel(1, args.lstm_dim,
                           args.lstm_layer,
+                          len(dataset.char2idx),
+                          args.char_embed_dim,
                           args.learning_rate).cuda()
     return model
 
