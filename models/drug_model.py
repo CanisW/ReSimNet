@@ -32,17 +32,17 @@ class DrugModel(nn.Module):
         self.criterion = nn.MSELoss()
         print(info)
 
-    def init_rnn_h(self, batch_size):
+    def init_lstm_h(self, batch_size):
         return Variable(torch.zeros(
             self.lstm_layer*1, batch_size, self.lstm_dim)).cuda()
 
     # Set Siamese network as basic LSTM
     def siamese_network(self, inputs):
-        init_lstm_h = self.init_lstm_h(inputs(0))
-        lstm_out, _ = self.s_rnn(inputs, init_lstm_h)
+        init_lstm_h = self.init_lstm_h(inputs.size(0))
+        lstm_out, _ = self.lstm(inputs, init_lstm_h)
         print(lstm_out.size())
         sys.exit()
-        return lstm_out
+        return lstm_out[:,-1,:]
     
     # Calculate similarity score of vec1 and vec2
     def distance_layer(self, vec1, vec2, distance='cosine'):

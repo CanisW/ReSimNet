@@ -27,7 +27,7 @@ LOGGER = logging.getLogger(__name__)
 argparser = argparse.ArgumentParser()
 argparser.add_argument('--task_type', type=str, default='drug')
 argparser.add_argument('--data_path', type=str, 
-        default='./tasks/drug/data/babi(v0.1).pkl')
+        default='./tasks/data/drug/drug(v0.1).pkl')
 argparser.add_argument('--checkpoint_dir', type=str, default='./results/')
 argparser.add_argument('--model_name', type=str, default='model.pth')
 argparser.add_argument('--print_step', type=float, default=1)
