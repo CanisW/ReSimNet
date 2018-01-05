@@ -1,4 +1,4 @@
-# LSTM Siamese Network for Drug Similarity)
+# LSTM Siamese Network for Drug Similarity
 PyTorch implementation of LSTM Siamese Network
 
 ## Run Code
