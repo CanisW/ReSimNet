@@ -14,8 +14,8 @@ from models.root.utils import *
 # run a single epoch
 def run_drug(model, dataset, args, train=False):
     total_step = 0.0
-    total_metrics = np.zeros(1)
-    targ_set = []
+    total_metrics = np.zeros(2)
+    tar_set = []
     pred_set = []
     start_time = datetime.now()
 
@@ -36,6 +36,12 @@ def run_drug(model, dataset, args, train=False):
         total_metrics[0] += loss.data[0]
         total_step += 1.0
 
+        # Calculate corref
+        tar_set += list(sim.data.cpu().numpy())
+        pred_set += list(outputs.data.cpu().numpy())
+        corref = np.corrcoef(tar_set, pred_set)[0][1]
+        total_metrics[1] += corref
+
         if train:
             loss.backward()
             # nn.utils.clip_grad_norm(model.get_model_params(), 
@@ -45,14 +51,14 @@ def run_drug(model, dataset, args, train=False):
                     p.grad.data.clamp_(-args.grad_clip, args.grad_clip)
             model.optimizer.step()
         
-        # print step
+        # Print for print step or at last
         if total_step % args.print_step == 0:
             et = int((datetime.now() - start_time).total_seconds())
             _progress = progress(
                     (total_step - 1) * args.batch_size + len(k1), 
                     dataset.dataset_len)
             _progress += ('{} '.format(int(total_step)) + ' iter '
-                    + ' [{:.3f}]'.format(loss.data[0])
+                    + ' [{:.3f}, {:.3f}]'.format(loss.data[0], corref)
                     + ' time: {:2d}:{:2d}:{:2d}'.format(
                         et//3600, et%3600//60, et%60))
             sys.stdout.write(_progress)
@@ -60,8 +66,10 @@ def run_drug(model, dataset, args, train=False):
 
     # end of an epoch
     et = (datetime.now() - start_time).total_seconds()
+    corref = np.corrcoef(tar_set, pred_set)[0][1]
     print('\n\ttotal metrics:\t' + str([float('{:.3f}'.format(tm))
         for tm in total_metrics/total_step]))
+    print('\tpearson correlation: {:.3f}\t'.format(corref))
 
     return total_metrics[0] / total_step
 

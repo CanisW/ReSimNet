@@ -38,8 +38,8 @@ argparser.add_argument('--resume', action='store_true', default=False)
 argparser.add_argument('--debug', action='store_true', default=False)
 
 # train config
-argparser.add_argument('--batch_size', type=int, default=8)
-argparser.add_argument('--epoch', type=int, default=10)
+argparser.add_argument('--batch_size', type=int, default=32)
+argparser.add_argument('--epoch', type=int, default=100)
 argparser.add_argument('--learning_rate', type=float, default=1e-3)
 argparser.add_argument('--weight_decay', type=float, default=0)
 argparser.add_argument('--grad_max_norm', type=int, default=10)
