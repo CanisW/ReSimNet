@@ -15,6 +15,8 @@ from models.root.utils import *
 def run_drug(model, dataset, args, train=False):
     total_step = 0.0
     total_metrics = np.zeros(1)
+    targ_set = []
+    pred_set = []
     start_time = datetime.now()
 
     for k1, k1a, k1b, k2, k2a, k2b, sim in dataset.loader(args.batch_size):
@@ -61,5 +63,5 @@ def run_drug(model, dataset, args, train=False):
     print('\n\ttotal metrics:\t' + str([float('{:.3f}'.format(tm))
         for tm in total_metrics/total_step]))
 
-    return total_metrics / total_step
+    return total_metrics[0] / total_step
 

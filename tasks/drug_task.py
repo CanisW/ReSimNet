@@ -12,27 +12,35 @@ from os.path import expanduser
 class DrugDataset(object):
     def __init__(self, data_path):
         self.initial_setting()
-        self.key_set = self.process_data(data_path)
-        self.dataset = self.load_pairs(self.key_set)
+        self.pairs = self.process_data(data_path)
+        self.dataset = self.split_dataset(self.pairs)
 
     def initial_setting(self):
         # Dataset split into train/valid/test
-        self.key_set = []
-        self.dataset = {'tr': [], 'va': [], 'te': []} # TODO
-        self.input_maxlen = 0
+        self.pairs = []
+        self.dataset = {'tr': [], 'va': [], 'te': []}
+        self.SR = [0.7, 0.1, 0.2] # split raio
 
         # Static values
-        self.FEATURE_NUM = 8
-        self.INCHI_KEY_IDX = 5
+        self.FEATURE_NUM = 11
+        self.ORG_INCHI_IDX = 4
+        self.TAR_INCHI_IDX = 5
         self.KEY_LENGTH = 27
+        self.SIM_IDX = 8
+        self.NUM_SIM = 3
 
-        # Key dictionaries
-        self.key2idx = {'a': {}, 'b': {}}
-        self.idx2key = {'a': {}, 'b': {}}
+        # Key dictionaries (a part, b part, total)
+        self.key2idx = {'a': {}, 'b': {}, 't': {}}
+        self.idx2key = {'a': {}, 'b': {}, 't': {}}
 
         # Character dictionaries
         self.char2idx = {}
         self.idx2char = {}
+
+    def register_key(self, key):
+        if key not in self.key2idx['t']:
+            self.key2idx['t'][key] = len(self.key2idx['t'])
+            self.idx2key['t'][len(self.idx2key['t'])] = key
     
     def register_key_a(self, key_a):
         if key_a not in self.key2idx['a']:
@@ -51,8 +59,13 @@ class DrugDataset(object):
 
     def process_data(self, path):
         print('### Processing {}'.format(path))
-        key_set = []
-        # pairs = {'tr': [], 'va': [], 'te': []}
+        key1_set = []
+        key1_a_set = []
+        key1_b_set = []
+        key2_set = []
+        key2_a_set = []
+        key2_b_set = []
+        similarities = []
 
         with open(path) as f:
             csv_reader = csv.reader(f)
@@ -61,36 +74,68 @@ class DrugDataset(object):
                     continue
                 
                 # Skip invalid rows, keys
-                key = row[self.INCHI_KEY_IDX]
+                key1 = row[self.ORG_INCHI_IDX]
+                key2 = row[self.TAR_INCHI_IDX]
+                similarity = row[self.SIM_IDX:self.SIM_IDX+self.NUM_SIM]
+                similarity = list(map(lambda x: float(x), similarity))
                 assert self.FEATURE_NUM == len(row), len(row)
-                if len(key.split('-')) != 3:
-                    print('Invalid key: ', key)
-                    continue
-                assert self.KEY_LENGTH == len(key), len(key)
+                assert len(key1.split('-')) == 3
+                assert len(key2.split('-')) == 3
+                assert key1.split('-')[2] == key2.split('-')[2] == 'N'
+                assert self.KEY_LENGTH == len(key1), len(key)
+                assert self.KEY_LENGTH == len(key2), len(key)
 
                 # Register each key to dictionaries
-                key_a, key_b, _ = key.split('-')
-                self.register_key_a(key_a)
-                self.register_key_b(key_b)
-                list(map(lambda x: self.register_char(x), key))
+                key1_a, key1_b, _ = key1.split('-')
+                key2_a, key2_b, _ = key2.split('-')
+                self.register_key(key1)
+                self.register_key(key2)
+                self.register_key_a(key1_a)
+                self.register_key_b(key1_b)
+                self.register_key_a(key2_a)
+                self.register_key_b(key2_b)
+                list(map(lambda x: self.register_char(x), key1))
+                list(map(lambda x: self.register_char(x), key2))
 
-                key_set.append([list(map(lambda x: self.char2idx[x], key)),
-                    self.key2idx['a'][key_a], self.key2idx['b'][key_b]])
+                # Save each key and similarities
+                key1_set.append(list(map(lambda x: self.char2idx[x], key1)))
+                key1_a_set.append(self.key2idx['a'][key1_a])
+                key1_b_set.append(self.key2idx['b'][key1_b])
+                key2_set.append(list(map(lambda x: self.char2idx[x], key2)))
+                key2_a_set.append(self.key2idx['a'][key2_a])
+                key2_b_set.append(self.key2idx['b'][key2_b])
+                similarities.append(similarity)
 
-        print('Character dictionary size {}'.format(len(self.char2idx)))
+        pairs = [key1_set, key1_a_set, key1_b_set,
+                 key2_set, key2_a_set, key2_b_set, similarities]
+
+        print('Key dictionary size {}'.format(len(self.key2idx['t'])))
         print('Key A dictionary size {}'.format(len(self.key2idx['a'])))
         print('Key B dictionary size {}'.format(len(self.key2idx['b'])))
-        print('Dataset size {}\n'.format(len(key_set)))
+        print('Character dictionary size {}'.format(len(self.char2idx)))
+        print('Dataset size {}'.format(len(key1_set)))
 
-        return np.array(key_set)
+        return pairs
     
-    def load_pairs(self, key_set):
-        raise NotImplementedError
+    def split_dataset(self, p):
+        zipped = list(zip(p[0], p[1], p[2], p[3], p[4], p[5], p[6]))
+        random.shuffle(zipped)
+        shuffled_p = list(zip(*zipped))
 
-    def loader(self, batch_size=16, maxlen=None):
-        if maxlen is None: 
-            maxlen = float("inf")
+        tr_idx, va_idx, te_idx = list(map(lambda x: int(x*len(p[0])), self.SR))
+        train = list(map(
+            lambda x: list(x)[:tr_idx], shuffled_p))
+        valid = list(map(
+            lambda x: x[tr_idx:tr_idx+va_idx], shuffled_p))
+        test = list(map(
+            lambda x: x[tr_idx+va_idx:], shuffled_p))
 
+        print('Train/Valid/Test split: {}/{}/{}\n'.format(
+              len(train[0]), len(valid[0]), len(test[0])))
+
+        return {'tr': train, 'va': valid, 'te': test}
+
+    def loader(self, batch_size=16):
         batch_key1 = []
         batch_key1a = []
         batch_key1b = []
@@ -98,17 +143,25 @@ class DrugDataset(object):
         batch_key2a = []
         batch_key2b = []
         batch_sim = []
+        d = self.dataset[self._mode]
 
-        for idx in range(0, self.dataset_len):
-            key_idxs = random.sample(range(len(self.key_set)), 2)
-            key1, key2 = self.key_set[key_idxs, :]
-            batch_key1.append(key1[0])
-            batch_key1a.append(key1[1])
-            batch_key1b.append(key1[2])
-            batch_key2.append(key2[0])
-            batch_key2a.append(key2[1])
-            batch_key2b.append(key2[2])
-            batch_sim.append(np.random.uniform(-1, 1, size=1))
+        for d0, d1, d2, d3, d4, d5, d6 \
+                in zip(d[0], d[1], d[2], d[3], d[4], d[5], d[6]):
+            # Make it cleaner
+            d0 = np.array(d0)
+            d1 = np.array(d1)
+            d2 = np.array(d2)
+            d3 = np.array(d3)
+            d4 = np.array(d4)
+            d5 = np.array(d5)
+            d6 = np.array(d6)
+            batch_key1.append(d0)
+            batch_key1a.append(d1)
+            batch_key1b.append(d2)
+            batch_key2.append(d3)
+            batch_key2a.append(d4)
+            batch_key2b.append(d5)
+            batch_sim.append(d6[0])
 
             if len(batch_key1) == batch_size:
                 yield (batch_key1, batch_key1a, batch_key1b, batch_key2, 
@@ -118,9 +171,9 @@ class DrugDataset(object):
 
     def shuffle_data(self):
         d = self.dataset[self._mode]
-        zipped = list(zip(d[0], d[1], d[2], d[3], d[4]))
+        zipped = list(zip(d[0], d[1], d[2], d[3], d[4], d[5], d[6]))
         random.shuffle(zipped)
-        d[0], d[1], d[2], d[3], d[4] = zip(*zipped)
+        d[0], d[1], d[2], d[3], d[4], d[5], d[6] = zip(*zipped)
 
     def decode_data(self, k1, k1a, k1b, k2, k2a, k2b, sim):
         print('Key1: {}'.format(''.join(list(map(
@@ -139,12 +192,7 @@ class DrugDataset(object):
 
     @property
     def dataset_len(self):
-        if self._mode == 'tr':
-            return 16*1000
-        elif self._mode == 'va':
-            return 16*100
-        elif self._mode == 'te':
-            return 16*100
+        return len(self.dataset[self._mode][0])
 
 
 """
@@ -161,7 +209,7 @@ class DrugDataset(object):
 if __name__ == '__main__':
 
     # Dataset configuration 
-    data_path = './data/drug/inchikey_info.csv'
+    data_path = './data/drug/pert_df_id_centroid_pair.csv'
     save_preprocess = True
     save_path = './data/drug/drug(tmp).pkl'
     load_path = './data/drug/drug(tmp).pkl'
@@ -182,6 +230,7 @@ if __name__ == '__main__':
     for idx, (k1, k1a, k1b, k2, k2a, k2b, sim) in enumerate(dataset.loader()):
         k1, k1a, k1b, k2, k2a, k2b, sim  = (np.array(xx) for xx in [k1, k1a, k1b,
                                             k2, k2a, k2b, sim])
-        dataset.decode_data(k1[0], k1a[0], k1b[0], k2[0], k2a[0], k2b[0], 
-                sim[0])
+        # dataset.decode_data(k1[0], k1a[0], k1b[0], k2[0], k2a[0], k2b[0], 
+        #         sim[0])
+        pass
 

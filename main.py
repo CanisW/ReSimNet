@@ -66,6 +66,7 @@ def run_experiment(model, dataset, run_fn, args):
         if args.resume:
             model.load_checkpoint(args.checkpoint_dir, args.model_name)
 
+        best = 0.0
         for ep in range(args.epoch):
             print('- Training Epoch %d' % (ep+1))
             dataset.set_mode('tr')
@@ -74,8 +75,8 @@ def run_experiment(model, dataset, run_fn, args):
             if args.valid:
                 print('- Validation')
                 dataset.set_mode('va')
-                run_fn(model, dataset, args, train=False)
-                if not args.resume:
+                curr = run_fn(model, dataset, args, train=False)
+                if not args.resume and curr > best:
                     model.save_checkpoint({
                         'state_dict': model.state_dict(),
                         'optimizer': model.optimizer.state_dict()},
