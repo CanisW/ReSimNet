@@ -19,7 +19,8 @@ def run_drug(model, dataset, args, train=False):
     pred_set = []
     start_time = datetime.now()
 
-    for k1, k1a, k1b, k2, k2a, k2b, sim in dataset.loader(args.batch_size):
+    for k1, k1a, k1b, k2, k2a, k2b, sim in dataset.loader(
+                                            args.batch_size, args.sim_idx):
         k1, k1a, k1b, k2, k2a, k2b, sim  = (np.array(xx) for xx in [k1, k1a, k1b,
                                             k2, k2a, k2b, sim])
 
@@ -71,5 +72,5 @@ def run_drug(model, dataset, args, train=False):
         for tm in total_metrics/total_step]))
     print('\tpearson correlation: {:.3f}\t'.format(corref))
 
-    return total_metrics[0] / total_step
+    return total_metrics[1] / total_step
 

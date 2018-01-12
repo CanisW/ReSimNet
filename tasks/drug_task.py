@@ -135,7 +135,7 @@ class DrugDataset(object):
 
         return {'tr': train, 'va': valid, 'te': test}
 
-    def loader(self, batch_size=16):
+    def loader(self, batch_size=16, sim_idx=0):
         batch_key1 = []
         batch_key1a = []
         batch_key1b = []
@@ -161,7 +161,7 @@ class DrugDataset(object):
             batch_key2.append(d3)
             batch_key2a.append(d4)
             batch_key2b.append(d5)
-            batch_sim.append(d6[0])
+            batch_sim.append(d6[sim_idx])
 
             if len(batch_key1) == batch_size:
                 yield (batch_key1, batch_key1a, batch_key1b, batch_key2, 

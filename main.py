@@ -50,6 +50,7 @@ argparser.add_argument('--lstm_dim', type=int, default=80)
 argparser.add_argument('--lstm_layer', type=int, default=1)
 argparser.add_argument('--char_embed_dim', type=int, default=15)
 argparser.add_argument('--key_embed_dim', type=int, default=50)
+argparser.add_argument('--sim_idx', type=int, default=0)
 argparser.add_argument('--seed', type=int, default=1000)
 
 args = argparser.parse_args()
@@ -77,6 +78,7 @@ def run_experiment(model, dataset, run_fn, args):
                 dataset.set_mode('va')
                 curr = run_fn(model, dataset, args, train=False)
                 if not args.resume and curr > best:
+                    best = curr
                     model.save_checkpoint({
                         'state_dict': model.state_dict(),
                         'optimizer': model.optimizer.state_dict()},
