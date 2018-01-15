@@ -18,21 +18,24 @@ def run_drug(model, dataset, args, train=False):
     tar_set = []
     pred_set = []
     start_time = datetime.now()
+    dataset.shuffle()
 
-    for k1, k1a, k1b, k2, k2a, k2b, sim in dataset.loader(
+    for k1, k1_l, k2, k2_l, sim in dataset.loader(
                                             args.batch_size, args.sim_idx):
-        k1, k1a, k1b, k2, k2a, k2b, sim  = (np.array(xx) for xx in [k1, k1a, k1b,
-                                            k2, k2a, k2b, sim])
+        k1, k1_l, k2, k2_l, sim  = (np.array(xx) for xx 
+                                            in [k1, k1_l, k2, k2_l, sim])
 
         k1 = Variable(torch.LongTensor(k1)).cuda()
         k2 = Variable(torch.LongTensor(k2)).cuda()
+        k1_l = torch.LongTensor(k1_l)
+        k2_l = torch.LongTensor(k2_l)
         sim = Variable(torch.FloatTensor(sim)).cuda()
 
         model.optimizer.zero_grad()
         if train: model.train()
         else: model.eval()
 
-        outputs = model(k1, k2)
+        outputs = model(k1, k1_l, k2, k2_l)
         loss = model.get_loss(outputs, sim)
         total_metrics[0] += loss.data[0]
         total_step += 1.0
@@ -72,5 +75,5 @@ def run_drug(model, dataset, args, train=False):
         for tm in total_metrics/total_step]))
     print('\tpearson correlation: {:.3f}\t'.format(corref))
 
-    return total_metrics[1] / total_step
+    return corref
 

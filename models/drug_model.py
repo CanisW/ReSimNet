@@ -40,14 +40,20 @@ class DrugModel(nn.Module):
             self.lstm_layer*1, batch_size, self.lstm_dim)).cuda())
 
     # Set Siamese network as basic LSTM
-    def siamese_network(self, inputs):
+    def siamese_network(self, inputs, length):
         # Character embedding
         c_embed = self.char_embed(inputs)
 
         # Run LSTM
         init_lstm_h = self.init_lstm_h(inputs.size(0))
         lstm_out, _ = self.lstm(c_embed, init_lstm_h)
-        return lstm_out[:,-1,:]
+        lstm_out = lstm_out.contiguous().view(-1, self.lstm_dim)
+
+        # Select length
+        input_lens = (torch.arange(0, inputs.size(0)).type(torch.LongTensor)
+                * inputs.size(1) + length - 1).cuda()
+        selected = lstm_out[input_lens,:]
+        return selected
     
     # Calculate similarity score of vec1 and vec2
     def distance_layer(self, vec1, vec2, distance='cosine'):
@@ -61,9 +67,9 @@ class DrugModel(nn.Module):
 
         return similarity
 
-    def forward(self, key1, key2):
-        embed1 = self.siamese_network(key1) 
-        embed2 = self.siamese_network(key2)
+    def forward(self, key1, key1_len, key2, key2_len):
+        embed1 = self.siamese_network(key1, key1_len) 
+        embed2 = self.siamese_network(key2, key2_len)
         similarity = self.distance_layer(embed1, embed2)
 
         return similarity

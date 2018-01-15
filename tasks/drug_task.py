@@ -13,6 +13,7 @@ class DrugDataset(object):
     def __init__(self, data_path):
         self.initial_setting()
         self.pairs = self.process_data(data_path)
+        self.pairs = self.pad_sequence(self.pairs)
         self.dataset = self.split_dataset(self.pairs)
 
     def initial_setting(self):
@@ -20,37 +21,29 @@ class DrugDataset(object):
         self.pairs = []
         self.dataset = {'tr': [], 'va': [], 'te': []}
         self.SR = [0.7, 0.1, 0.2] # split raio
+        self.input_maxlen = 0
 
         # Static values
         self.FEATURE_NUM = 11
-        self.ORG_INCHI_IDX = 4
-        self.TAR_INCHI_IDX = 5
+        self.ORG_INCHI_IDX = 6
+        self.TAR_INCHI_IDX = 7
         self.KEY_LENGTH = 27
         self.SIM_IDX = 8
         self.NUM_SIM = 3
 
         # Key dictionaries (a part, b part, total)
-        self.key2idx = {'a': {}, 'b': {}, 't': {}}
-        self.idx2key = {'a': {}, 'b': {}, 't': {}}
+        self.key2idx = {}
+        self.idx2key = {}
+        self.PAD = 'PAD'
 
         # Character dictionaries
         self.char2idx = {}
         self.idx2char = {}
 
     def register_key(self, key):
-        if key not in self.key2idx['t']:
-            self.key2idx['t'][key] = len(self.key2idx['t'])
-            self.idx2key['t'][len(self.idx2key['t'])] = key
-    
-    def register_key_a(self, key_a):
-        if key_a not in self.key2idx['a']:
-            self.key2idx['a'][key_a] = len(self.key2idx['a'])
-            self.idx2key['a'][len(self.idx2key['a'])] = key_a
-
-    def register_key_b(self, key_b):
-        if key_b not in self.key2idx['b']:
-            self.key2idx['b'][key_b] = len(self.key2idx['b'])
-            self.idx2key['b'][len(self.idx2key['b'])] = key_b
+        if key not in self.key2idx:
+            self.key2idx[key] = len(self.key2idx)
+            self.idx2key[len(self.idx2key)] = key
 
     def register_char(self, char):
         if char not in self.char2idx:
@@ -60,12 +53,11 @@ class DrugDataset(object):
     def process_data(self, path):
         print('### Processing {}'.format(path))
         key1_set = []
-        key1_a_set = []
-        key1_b_set = []
+        key1_len = []
         key2_set = []
-        key2_a_set = []
-        key2_b_set = []
+        key2_len = []
         similarities = []
+        self.register_char(self.PAD)
 
         with open(path) as f:
             csv_reader = csv.reader(f)
@@ -79,46 +71,52 @@ class DrugDataset(object):
                 similarity = row[self.SIM_IDX:self.SIM_IDX+self.NUM_SIM]
                 similarity = list(map(lambda x: float(x), similarity))
                 assert self.FEATURE_NUM == len(row), len(row)
-                assert len(key1.split('-')) == 3
-                assert len(key2.split('-')) == 3
-                assert key1.split('-')[2] == key2.split('-')[2] == 'N'
-                assert self.KEY_LENGTH == len(key1), len(key)
-                assert self.KEY_LENGTH == len(key2), len(key)
 
                 # Register each key to dictionaries
-                key1_a, key1_b, _ = key1.split('-')
-                key2_a, key2_b, _ = key2.split('-')
                 self.register_key(key1)
                 self.register_key(key2)
-                self.register_key_a(key1_a)
-                self.register_key_b(key1_b)
-                self.register_key_a(key2_a)
-                self.register_key_b(key2_b)
                 list(map(lambda x: self.register_char(x), key1))
                 list(map(lambda x: self.register_char(x), key2))
 
+                # Update maxlen
+                self.input_maxlen = self.input_maxlen if self.input_maxlen > \
+                        len(key1) else len(key1)
+                self.input_maxlen = self.input_maxlen if self.input_maxlen > \
+                        len(key2) else len(key2)
+
                 # Save each key and similarities
                 key1_set.append(list(map(lambda x: self.char2idx[x], key1)))
-                key1_a_set.append(self.key2idx['a'][key1_a])
-                key1_b_set.append(self.key2idx['b'][key1_b])
+                key1_len.append(len(key1))
                 key2_set.append(list(map(lambda x: self.char2idx[x], key2)))
-                key2_a_set.append(self.key2idx['a'][key2_a])
-                key2_b_set.append(self.key2idx['b'][key2_b])
+                key2_len.append(len(key2))
                 similarities.append(similarity)
 
-        pairs = [key1_set, key1_a_set, key1_b_set,
-                 key2_set, key2_a_set, key2_b_set, similarities]
+        pairs = [key1_set, key1_len, key2_set, key2_len, similarities]
 
-        print('Key dictionary size {}'.format(len(self.key2idx['t'])))
-        print('Key A dictionary size {}'.format(len(self.key2idx['a'])))
-        print('Key B dictionary size {}'.format(len(self.key2idx['b'])))
+        print('Key dictionary size {}'.format(len(self.key2idx)))
         print('Character dictionary size {}'.format(len(self.char2idx)))
+        print('Input maxlen {}'.format(self.input_maxlen))
         print('Dataset size {}'.format(len(key1_set)))
 
         return pairs
     
+    def pad_sequence(self, p):
+        # Pad key1_set
+        for key1 in p[0]:
+            while len(key1) != self.input_maxlen:
+                key1.append(self.char2idx[self.PAD])
+            assert len(key1) == self.input_maxlen
+
+        # Pad key2_set
+        for key2 in p[2]:
+            while len(key2) != self.input_maxlen:
+                key2.append(self.char2idx[self.PAD])
+            assert len(key2) == self.input_maxlen
+
+        return p
+    
     def split_dataset(self, p):
-        zipped = list(zip(p[0], p[1], p[2], p[3], p[4], p[5], p[6]))
+        zipped = list(zip(p[0], p[1], p[2], p[3], p[4]))
         random.shuffle(zipped)
         shuffled_p = list(zip(*zipped))
 
@@ -137,53 +135,42 @@ class DrugDataset(object):
 
     def loader(self, batch_size=16, sim_idx=0):
         batch_key1 = []
-        batch_key1a = []
-        batch_key1b = []
+        batch_key1_len = []
         batch_key2 = []
-        batch_key2a = []
-        batch_key2b = []
+        batch_key2_len = []
         batch_sim = []
         d = self.dataset[self._mode]
 
-        for d0, d1, d2, d3, d4, d5, d6 \
-                in zip(d[0], d[1], d[2], d[3], d[4], d[5], d[6]):
+        for d0, d1, d2, d3, d4 in zip(d[0], d[1], d[2], d[3], d[4]):
             # Make it cleaner
             d0 = np.array(d0)
             d1 = np.array(d1)
             d2 = np.array(d2)
             d3 = np.array(d3)
             d4 = np.array(d4)
-            d5 = np.array(d5)
-            d6 = np.array(d6)
             batch_key1.append(d0)
-            batch_key1a.append(d1)
-            batch_key1b.append(d2)
-            batch_key2.append(d3)
-            batch_key2a.append(d4)
-            batch_key2b.append(d5)
-            batch_sim.append(d6[sim_idx])
+            batch_key1_len.append(d1)
+            batch_key2.append(d2)
+            batch_key2_len.append(d3)
+            batch_sim.append(d4[sim_idx])
 
             if len(batch_key1) == batch_size:
-                yield (batch_key1, batch_key1a, batch_key1b, batch_key2, 
-                       batch_key2a, batch_key2b, batch_sim)
-                del (batch_key1[:], batch_key1a[:], batch_key1b[:], 
-                     batch_key2[:], batch_key2a[:], batch_key2b[:], batch_sim[:])
+                yield (batch_key1, batch_key1_len, 
+                       batch_key2, batch_key2_len, batch_sim)
+                del (batch_key1[:], batch_key1_len[:],
+                     batch_key2[:], batch_key2_len[:], batch_sim[:])
 
-    def shuffle_data(self):
+    def shuffle(self):
         d = self.dataset[self._mode]
-        zipped = list(zip(d[0], d[1], d[2], d[3], d[4], d[5], d[6]))
+        zipped = list(zip(d[0], d[1], d[2], d[3], d[4]))
         random.shuffle(zipped)
-        d[0], d[1], d[2], d[3], d[4], d[5], d[6] = zip(*zipped)
+        d[0], d[1], d[2], d[3], d[4] = zip(*zipped)
 
-    def decode_data(self, k1, k1a, k1b, k2, k2a, k2b, sim):
-        print('Key1: {}'.format(''.join(list(map(
-            lambda x: self.idx2char[x], k1)))))
-        print('Key1 A: {}'.format(self.idx2key['a'][k1a]))
-        print('Key1 B: {}'.format(self.idx2key['b'][k1b]))
-        print('Key2: {}'.format(''.join(list(map(
-            lambda x: self.idx2char[x], k2)))))
-        print('Key2 A: {}'.format(self.idx2key['a'][k2a]))
-        print('Key2 B: {}'.format(self.idx2key['b'][k2b]))
+    def decode_data(self, k1, k1_l, k2, k2_l, sim):
+        print('Key1: {}, length: {}'.format(''.join(list(map(
+            lambda x: self.idx2char[x], k1[:k1_l]))), k1_l))
+        print('Key2: {}, length: {}'.format(''.join(list(map(
+            lambda x: self.idx2char[x], k2[:k2_l]))), k2_l))
         print('Similarity: {}\n'.format(sim))
 
     # Dataset mode ['tr', 'va']
@@ -224,13 +211,11 @@ if __name__ == '__main__':
         dataset = pickle.load(open(load_path, 'rb'))
    
     # Loader testing
-    dataset.set_mode('va')
+    dataset.set_mode('te')
     # dataset.shuffle_data()
 
-    for idx, (k1, k1a, k1b, k2, k2a, k2b, sim) in enumerate(dataset.loader()):
-        k1, k1a, k1b, k2, k2a, k2b, sim  = (np.array(xx) for xx in [k1, k1a, k1b,
-                                            k2, k2a, k2b, sim])
-        # dataset.decode_data(k1[0], k1a[0], k1b[0], k2[0], k2a[0], k2b[0], 
-        #         sim[0])
+    for idx, (k1, k1_l, k2, k2_l, sim) in enumerate(dataset.loader()):
+        k1, k2, sim  = (np.array(xx) for xx in [k1, k2, sim])
+        dataset.decode_data(k1[0], k1_l[0], k2[0], k2_l[0], sim[0])
         pass
 
