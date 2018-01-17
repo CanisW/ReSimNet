@@ -13,19 +13,21 @@ from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 
 class DrugModel(nn.Module):
     def __init__(self, output_dim, lstm_dim, lstm_layer, 
-            char_vocab_size, char_embed_dim, learning_rate):
+            char_vocab_size, char_embed_dim, dist_fn, learning_rate):
 
         super(DrugModel, self).__init__()
 
         # Save model configs
         self.lstm_dim = lstm_dim
         self.lstm_layer = lstm_layer
+        self.dist_fn = dist_fn
 
         # Basic modules
         self.char_embed = nn.Embedding(char_vocab_size, char_embed_dim, 
                                        padding_idx=0)
         self.lstm = nn.LSTM(char_embed_dim, lstm_dim, lstm_layer,
                             batch_first=True)
+        self.dist_fc = nn.Linear(lstm_dim, 1)
 
         # Get params and register optimizer
         info, params = self.get_model_params()
@@ -46,6 +48,7 @@ class DrugModel(nn.Module):
         # Character embedding
         c_embed = self.char_embed(inputs)
 
+        '''
         # Sort c_embed
         _, sort_idx = torch.sort(length, dim=0, descending=True)
         _, unsort_idx = torch.sort(sort_idx, dim=0)
@@ -55,15 +58,20 @@ class DrugModel(nn.Module):
         c_embed = c_embed.index_select(0, Variable(sort_idx).cuda())
         sorted_len = length.index_select(0, sort_idx).tolist()
         c_packed = pack_padded_sequence(c_embed, sorted_len, batch_first=True) 
+        '''
+        c_packed = c_embed
+        maxlen = inputs.size(1)
 
         # Run LSTM
         init_lstm_h = self.init_lstm_h(inputs.size(0))
         lstm_out, _ = self.lstm(c_packed, init_lstm_h)
 
+        '''
         # Pad packed sequence
         c_pad, _ = pad_packed_sequence(lstm_out, batch_first=True)
         lstm_out = c_pad.index_select(0, Variable(unsort_idx).cuda())
-        lstm_out = lstm_out.view(-1, self.lstm_dim)
+        '''
+        lstm_out = lstm_out.contiguous().view(-1, self.lstm_dim)
 
         # Select length
         input_lens = (torch.arange(0, inputs.size(0)).type(torch.LongTensor)
@@ -72,23 +80,25 @@ class DrugModel(nn.Module):
         return selected
     
     # Calculate similarity score of vec1 and vec2
-    def distance_layer(self, vec1, vec2, distance='cosine'):
-        if distance == 'cosine':
+    def distance_layer(self, vec1, vec2, distance='l1'):
+        if distance == 'cos':
             similarity = F.cosine_similarity(
                     vec1 + 1e-16, vec2 + 1e-16, dim=-1)
         elif distance == 'l1':
-            similarity = torch.abs(vec1 - vec2)
+            similarity = F.tanh(self.dist_fc(torch.abs(vec1 - vec2)))
+            similarity = similarity.squeeze(1)
         elif distance == 'l2':
-            similarity = torch.abs((vec1 - vec2) ** 2)
+            similarity = F.tanh(self.dist_fc(torch.abs((vec1 - vec2) ** 2)))
+            similarity = similarity.squeeze(1)
 
         return similarity
 
     def forward(self, key1, key1_len, key2, key2_len):
         embed1 = self.siamese_network(key1, key1_len) 
         embed2 = self.siamese_network(key2, key2_len)
-        similarity = self.distance_layer(embed1, embed2)
+        similarity = self.distance_layer(embed1, embed2, self.dist_fn)
 
-        return similarity
+        return similarity, embed1, embed2
     
     def get_loss(self, outputs, targets):
         loss = self.criterion(outputs, targets)

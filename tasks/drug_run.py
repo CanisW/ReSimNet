@@ -1,4 +1,5 @@
 import sys
+import pickle
 import numpy as np
 import torch
 import torch.nn as nn
@@ -11,12 +12,23 @@ from torch.autograd import Variable
 from models.root.utils import *
 
 
+def register_key(key, key_len, idx2char, embed, dictionary):
+    key = key.data.tolist()
+    key_len = key_len.tolist()
+    for k, kl, emb in zip(key, key_len, embed):
+        chars = ''.join(list(map(lambda x: idx2char[x], k[:kl])))
+        if chars in dictionary:
+            assert dictionary[chars] == emb.data.tolist()
+        dictionary[chars] = emb.data.tolist()
+
+
 # run a single epoch
 def run_drug(model, dataset, args, train=False):
     total_step = 0.0
     total_metrics = np.zeros(2)
     tar_set = []
     pred_set = []
+    key2vec = {}
     start_time = datetime.now()
     dataset.shuffle()
 
@@ -35,7 +47,10 @@ def run_drug(model, dataset, args, train=False):
         if train: model.train()
         else: model.eval()
 
-        outputs = model(k1, k1_l, k2, k2_l)
+        outputs, embed1, embed2 = model(k1, k1_l, k2, k2_l)
+        if args.save_embed:
+            register_key(k1, k1_l, dataset.idx2char, embed1, key2vec)
+            register_key(k2, k2_l, dataset.idx2char, embed2, key2vec)
         loss = model.get_loss(outputs, sim)
         total_metrics[0] += loss.data[0]
         total_step += 1.0
@@ -46,7 +61,7 @@ def run_drug(model, dataset, args, train=False):
         corref = np.corrcoef(tar_set, pred_set)[0][1]
         total_metrics[1] += corref
 
-        if train:
+        if train and not args.save_embed:
             loss.backward()
             # nn.utils.clip_grad_norm(model.get_model_params(), 
             #         args.grad_max_norm)
@@ -68,12 +83,16 @@ def run_drug(model, dataset, args, train=False):
             sys.stdout.write(_progress)
             sys.stdout.flush()
 
-    # end of an epoch
+    # End of an epoch
     et = (datetime.now() - start_time).total_seconds()
     corref = np.corrcoef(tar_set, pred_set)[0][1]
     print('\n\ttotal metrics:\t' + str([float('{:.3f}'.format(tm))
         for tm in total_metrics/total_step]))
     print('\tpearson correlation: {:.3f}\t'.format(corref))
+
+    # Save embed as pickle
+    if args.save_embed:
+        pickle.dump(key2vec, open(args.checkpoint_dir + 'embed.pkl', 'wb'))
 
     return corref
 

@@ -27,7 +27,8 @@ LOGGER = logging.getLogger(__name__)
 argparser = argparse.ArgumentParser()
 argparser.add_argument('--task_type', type=str, default='drug')
 argparser.add_argument('--data_path', type=str, 
-        default='./tasks/data/drug/drug(smiles).pkl')
+        # default='./tasks/data/drug/drug(smiles).pkl')
+        default='./tasks/data/drug/drug(inchikey).pkl')
 argparser.add_argument('--checkpoint_dir', type=str, default='./results/')
 argparser.add_argument('--model_name', type=str, default='model.pth')
 argparser.add_argument('--print_step', type=float, default=1)
@@ -36,6 +37,7 @@ argparser.add_argument('--valid', type=int, default=1)
 argparser.add_argument('--test', type=int, default=1)
 argparser.add_argument('--resume', action='store_true', default=False)
 argparser.add_argument('--debug', action='store_true', default=False)
+argparser.add_argument('--save_embed', action='store_true', default=False)
 
 # train config
 argparser.add_argument('--batch_size', type=int, default=32)
@@ -51,6 +53,7 @@ argparser.add_argument('--lstm_layer', type=int, default=1)
 argparser.add_argument('--char_embed_dim', type=int, default=15)
 argparser.add_argument('--key_embed_dim', type=int, default=50)
 argparser.add_argument('--sim_idx', type=int, default=0)
+argparser.add_argument('--dist_fn', type=str, default='l2')
 argparser.add_argument('--seed', type=int, default=1000)
 
 args = argparser.parse_args()
@@ -114,6 +117,7 @@ def get_model(args, dataset):
                           args.lstm_layer,
                           len(dataset.char2idx),
                           args.char_embed_dim,
+                          args.dist_fn,
                           args.learning_rate).cuda()
     return model
 
