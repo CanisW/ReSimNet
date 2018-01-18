@@ -20,20 +20,23 @@ class DrugDataset(object):
         # Dataset split into train/valid/test
         self.pairs = []
         self.dataset = {'tr': [], 'va': [], 'te': []}
-        self.SR = [0.7, 0.1, 0.2] # split raio
+        self.SR = [0.7, 0.1, 0.2] # split ratio
+        self.UR = 0.1 # Unknown ratio
         self.input_maxlen = 0
 
         # Static values
         self.FEATURE_NUM = 11
-        self.ORG_INCHI_IDX = 6
-        self.TAR_INCHI_IDX = 7
+        self.ORG_INCHI_IDX = 4
+        self.TAR_INCHI_IDX = 5
         self.KEY_LENGTH = 27
         self.SIM_IDX = 8
         self.NUM_SIM = 3
 
-        # Key dictionaries (a part, b part, total)
+        # Key dictionaries
         self.key2idx = {}
         self.idx2key = {}
+        self.known = {}
+        self.unknown = {}
         self.PAD = 'PAD'
 
         # Character dictionaries
@@ -116,20 +119,94 @@ class DrugDataset(object):
         return p
     
     def split_dataset(self, p):
+        # Shuffle key dicitonary
+        items = list(self.key2idx.items())
+        random.shuffle(items)
+        self.known = dict(items[:int(-len(items) * self.UR)])
+        self.unknown = dict(items[int(-len(items) * self.UR):])
+
+        # Unknown check
+        for unk, _ in self.unknown.items():
+            assert unk not in self.known
+
+        # Shuffle dataset
         zipped = list(zip(p[0], p[1], p[2], p[3], p[4]))
         random.shuffle(zipped)
-        shuffled_p = list(zip(*zipped))
+        sf_p = list(zip(*zipped))
 
-        tr_idx, va_idx, te_idx = list(map(lambda x: int(x*len(p[0])), self.SR))
-        train = list(map(
-            lambda x: list(x)[:tr_idx], shuffled_p))
-        valid = list(map(
-            lambda x: x[tr_idx:tr_idx+va_idx], shuffled_p))
-        test = list(map(
-            lambda x: x[tr_idx+va_idx:], shuffled_p))
+        # Ready for train/valid/test
+        train = [[], [], [], [], []]
+        valid = [[], [], [], [], []]
+        test = [[], [], [], [], []]
+        valid_kk = 0
+        valid_ku = 0
+        valid_uu = 0
+        test_kk = 0
+        test_ku = 0
+        test_uu = 0
 
-        print('Train/Valid/Test split: {}/{}/{}\n'.format(
+        # Iterate and split by unknown ratio
+        for p0, p1, p2, p3, p4 in zip(sf_p[0], sf_p[1], 
+                                      sf_p[2], sf_p[3], sf_p[4]):
+            key1 = ''.join(list(map(lambda x: self.idx2char[x], p0[:p1])))
+            key2 = ''.join(list(map(lambda x: self.idx2char[x], p2[:p3])))
+
+            if key1 in self.unknown or key2 in self.unknown:
+                is_test = np.random.binomial(1, 2/3.)
+                if is_test:
+                    test[0].append(p0)
+                    test[1].append(p1)
+                    test[2].append(p2)
+                    test[3].append(p3)
+                    test[4].append(p4)
+                    if key1 in self.unknown and key2 in self.unknown:
+                        test_uu += 1
+                    else:
+                        test_ku += 1
+                else:
+                    valid[0].append(p0)
+                    valid[1].append(p1)
+                    valid[2].append(p2)
+                    valid[3].append(p3)
+                    valid[4].append(p4)
+                    if key1 in self.unknown and key2 in self.unknown:
+                        valid_uu += 1
+                    else:
+                        valid_ku += 1
+
+        # Fill known/known set with limit of split ratio
+        for p0, p1, p2, p3, p4 in zip(sf_p[0], sf_p[1], 
+                                      sf_p[2], sf_p[3], sf_p[4]):
+            key1 = ''.join(list(map(lambda x: self.idx2char[x], p0[:p1])))
+            key2 = ''.join(list(map(lambda x: self.idx2char[x], p2[:p3])))
+
+            if key1 not in self.unknown and key2 not in self.unknown:
+                assert key1 in self.known and key2 in self.known
+                if len(train[0]) < len(sf_p[0]) * self.SR[0]:
+                    train[0].append(p0)
+                    train[1].append(p1)
+                    train[2].append(p2)
+                    train[3].append(p3)
+                    train[4].append(p4)
+                elif len(valid[0]) < len(sf_p[0]) * self.SR[1]: 
+                    valid[0].append(p0)
+                    valid[1].append(p1)
+                    valid[2].append(p2)
+                    valid[3].append(p3)
+                    valid[4].append(p4)
+                    valid_kk += 1
+                else:
+                    test[0].append(p0)
+                    test[1].append(p1)
+                    test[2].append(p2)
+                    test[3].append(p3)
+                    test[4].append(p4)
+                    test_kk += 1
+
+        print('Train/Valid/Test split: {}/{}/{}'.format(
               len(train[0]), len(valid[0]), len(test[0])))
+        print('Valid/Test KK,KU,UU: ({},{},{})/({},{},{})\n'.format(
+              valid_kk, valid_ku, valid_uu, test_kk, test_ku, test_uu))
 
         return {'tr': train, 'va': valid, 'te': test}
 
@@ -190,6 +267,8 @@ class DrugDataset(object):
         train:
         valid: 
         test: 
+
+    v0.2: unknown / known split
     
 """
 
@@ -216,6 +295,6 @@ if __name__ == '__main__':
 
     for idx, (k1, k1_l, k2, k2_l, sim) in enumerate(dataset.loader()):
         k1, k2, sim  = (np.array(xx) for xx in [k1, k2, sim])
-        dataset.decode_data(k1[0], k1_l[0], k2[0], k2_l[0], sim[0])
+        # dataset.decode_data(k1[0], k1_l[0], k2[0], k2_l[0], sim[0])
         pass
 

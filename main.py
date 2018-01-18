@@ -28,7 +28,7 @@ argparser = argparse.ArgumentParser()
 argparser.add_argument('--task_type', type=str, default='drug')
 argparser.add_argument('--data_path', type=str, 
         # default='./tasks/data/drug/drug(smiles).pkl')
-        default='./tasks/data/drug/drug(inchikey).pkl')
+        default='./tasks/data/drug/drug(inchikey_uu).pkl')
 argparser.add_argument('--checkpoint_dir', type=str, default='./results/')
 argparser.add_argument('--model_name', type=str, default='model.pth')
 argparser.add_argument('--print_step', type=float, default=1)

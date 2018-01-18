@@ -12,6 +12,7 @@ from torch.autograd import Variable
 from models.root.utils import *
 
 
+# Register each key embedding
 def register_key(key, key_len, idx2char, embed, dictionary):
     key = key.data.tolist()
     key_len = key_len.tolist()
@@ -92,7 +93,8 @@ def run_drug(model, dataset, args, train=False):
 
     # Save embed as pickle
     if args.save_embed:
-        pickle.dump(key2vec, open(args.checkpoint_dir + 'embed.pkl', 'wb'))
+        pickle.dump(key2vec, open('{}embed_{}.pkl'.format(
+                    args.checkpoint_dir, args.model_name), 'wb'))
 
     return corref
 
