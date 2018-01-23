@@ -66,7 +66,7 @@ def run_drug(model, dataset, args, train=False):
 
         # Grad zero + mode change
         model.optimizer.zero_grad()
-        if train: model.train()
+        if train: model.train(train)
         else: model.eval()
 
         # Get outputs
@@ -77,6 +77,7 @@ def run_drug(model, dataset, args, train=False):
         loss = model.get_loss(outputs, sim)
         total_metrics[0] += loss.data[0]
         total_step += 1.0
+        d_idx = (total_step - 1) * args.batch_size + k1.size(0)
 
         # Calculate corref
         tmp_tar = sim.data.cpu().numpy()
@@ -109,11 +110,9 @@ def run_drug(model, dataset, args, train=False):
             model.optimizer.step()
         
         # Print for print step or at last
-        if total_step % args.print_step == 0:
+        if total_step % args.print_step == 0 or d_idx == dataset.length:
             et = int((datetime.now() - start_time).total_seconds())
-            _progress = progress(
-                    (total_step - 1) * args.batch_size + len(k1), 
-                    dataset.dataset_len)
+            _progress = progress(d_idx, dataset.length)
             _progress += ('{} '.format(int(total_step)) + ' iter '
                     + ' [{:.3f}, cor:{:.3f}'.format(loss.data[0], corref)
                     + ', kk:{:.3f}, ku:{:.3f}, uu:{:.3f}]'.format(

@@ -12,8 +12,9 @@ from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 
 
 class DrugModel(nn.Module):
-    def __init__(self, output_dim, lstm_dim, lstm_layer, 
-            char_vocab_size, char_embed_dim, dist_fn, learning_rate):
+    def __init__(self, output_dim, lstm_dim, lstm_layer, lstm_dropout, 
+            linear_dropout, char_vocab_size, char_embed_dim, dist_fn, 
+            learning_rate):
 
         super(DrugModel, self).__init__()
 
@@ -26,8 +27,11 @@ class DrugModel(nn.Module):
         self.char_embed = nn.Embedding(char_vocab_size, char_embed_dim, 
                                        padding_idx=0)
         self.lstm = nn.LSTM(char_embed_dim, lstm_dim, lstm_layer,
-                            batch_first=True)
-        self.dist_fc = nn.Linear(lstm_dim, 1)
+                            batch_first=True, dropout=lstm_dropout)
+        self.dist_fc = nn.Sequential(
+                            nn.Dropout(linear_dropout),
+                            nn.Linear(lstm_dim, 1)
+                       )
 
         # Get params and register optimizer
         info, params = self.get_model_params()
@@ -86,10 +90,10 @@ class DrugModel(nn.Module):
                     vec1 + 1e-16, vec2 + 1e-16, dim=-1)
         elif distance == 'l1':
             similarity = F.tanh(self.dist_fc(torch.abs(vec1 - vec2)))
-            similarity = similarity.squeeze(1)
+            similarity = similarity.squeeze(1) * 100
         elif distance == 'l2':
             similarity = F.tanh(self.dist_fc(torch.abs((vec1 - vec2) ** 2)))
-            similarity = similarity.squeeze(1)
+            similarity = similarity.squeeze(1) * 100
 
         return similarity
 

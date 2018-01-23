@@ -25,12 +25,11 @@ class DrugDataset(object):
         self.input_maxlen = 0
 
         # Static values
-        self.FEATURE_NUM = 11
-        self.ORG_INCHI_IDX = 4
-        self.TAR_INCHI_IDX = 5
-        self.KEY_LENGTH = 27
-        self.SIM_IDX = 8
-        self.NUM_SIM = 3
+        self.FEATURE_NUM = 8
+        self.ORG_INCHI_IDX = 3
+        self.TAR_INCHI_IDX = 4
+        self.SIM_IDX = 7
+        self.NUM_SIM = 1
 
         # Key dictionaries
         self.key2idx = {}
@@ -237,6 +236,9 @@ class DrugDataset(object):
                 del (batch_key1[:], batch_key1_len[:],
                      batch_key2[:], batch_key2_len[:], batch_sim[:])
 
+        yield (batch_key1, batch_key1_len, 
+               batch_key2, batch_key2_len, batch_sim)
+
     def shuffle(self):
         d = self.dataset[self._mode]
         zipped = list(zip(d[0], d[1], d[2], d[3], d[4]))
@@ -255,7 +257,7 @@ class DrugDataset(object):
         self._mode = mode
 
     @property
-    def dataset_len(self):
+    def length(self):
         return len(self.dataset[self._mode][0])
 
 
@@ -275,7 +277,7 @@ class DrugDataset(object):
 if __name__ == '__main__':
 
     # Dataset configuration 
-    data_path = './data/drug/pert_df_id_centroid_pair.csv'
+    data_path = './data/drug/connectivity_top5bot5_pair.csv'
     save_preprocess = True
     save_path = './data/drug/drug(tmp).pkl'
     load_path = './data/drug/drug(tmp).pkl'

@@ -27,11 +27,13 @@ LOGGER = logging.getLogger(__name__)
 argparser = argparse.ArgumentParser()
 argparser.add_argument('--task_type', type=str, default='drug')
 argparser.add_argument('--data_path', type=str, 
-        # default='./tasks/data/drug/drug(smiles).pkl')
-        default='./tasks/data/drug/drug(inchikey_uu).pkl')
+        # default='./tasks/data/drug/drug(smiles_uu).pkl')
+        # default='./tasks/data/drug/drug(inchikey_uu).pkl')
+        default='./tasks/data/drug/cscore(inchikey).pkl')
+        # default='./tasks/data/drug/cscore(smiles).pkl')
 argparser.add_argument('--checkpoint_dir', type=str, default='./results/')
 argparser.add_argument('--model_name', type=str, default='model.pth')
-argparser.add_argument('--print_step', type=float, default=1)
+argparser.add_argument('--print_step', type=float, default=10)
 argparser.add_argument('--train', type=int, default=1)
 argparser.add_argument('--valid', type=int, default=1)
 argparser.add_argument('--test', type=int, default=1)
@@ -50,6 +52,8 @@ argparser.add_argument('--grad_clip', type=int, default=10)
 # model config
 argparser.add_argument('--lstm_dim', type=int, default=80)
 argparser.add_argument('--lstm_layer', type=int, default=1)
+argparser.add_argument('--lstm_dr', type=int, default=0.5)
+argparser.add_argument('--linear_dr', type=int, default=0.5)
 argparser.add_argument('--char_embed_dim', type=int, default=15)
 argparser.add_argument('--key_embed_dim', type=int, default=50)
 argparser.add_argument('--sim_idx', type=int, default=0)
@@ -115,6 +119,7 @@ def get_model(args, dataset):
     if args.task_type == 'drug':
         model = DrugModel(1, args.lstm_dim,
                           args.lstm_layer,
+                          args.lstm_dr, args.linear_dr,
                           len(dataset.char2idx),
                           args.char_embed_dim,
                           args.dist_fn,
