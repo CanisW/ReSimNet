@@ -21,13 +21,13 @@ class DrugDataset(object):
         self.pairs = []
         self.dataset = {'tr': [], 'va': [], 'te': []}
         self.SR = [0.7, 0.1, 0.2] # split ratio
-        self.UR = 0.1 # Unknown ratio
+        self.UR = 0.0 # Unknown ratio
         self.input_maxlen = 0
 
         # Static values
         self.FEATURE_NUM = 8
-        self.ORG_INCHI_IDX = 3
-        self.TAR_INCHI_IDX = 4
+        self.ORG_INCHI_IDX = 5
+        self.TAR_INCHI_IDX = 6
         self.SIM_IDX = 7
         self.NUM_SIM = 1
 
@@ -121,8 +121,10 @@ class DrugDataset(object):
         # Shuffle key dicitonary
         items = list(self.key2idx.items())
         random.shuffle(items)
-        self.known = dict(items[:int(-len(items) * self.UR)])
-        self.unknown = dict(items[int(-len(items) * self.UR):])
+        # self.known = dict(items[:int(-len(items) * self.UR)])
+        # self.unknown = dict(items[int(-len(items) * self.UR):])
+        self.known = dict(items[:])
+        self.unknown = dict()
 
         # Unknown check
         for unk, _ in self.unknown.items():
@@ -280,13 +282,13 @@ if __name__ == '__main__':
     data_path = './data/drug/connectivity_top5bot5_pair.csv'
     save_preprocess = True
     save_path = './data/drug/drug(tmp).pkl'
-    load_path = './data/drug/drug(tmp).pkl'
+    load_path = './data/drug/drug(inchikey_uu).pkl'
 
     # Save or load dataset
     if save_preprocess:
         dataset = DrugDataset(data_path)
         pickle.dump(dataset, open(save_path, 'wb'))
-        print('## Save preprocess %s' % load_path)
+        print('## Save preprocess %s' % save_path)
     else:
         print('## Load preprocess %s' % load_path)
         dataset = pickle.load(open(load_path, 'rb'))

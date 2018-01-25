@@ -14,7 +14,7 @@ from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 class DrugModel(nn.Module):
     def __init__(self, output_dim, lstm_dim, lstm_layer, lstm_dropout, 
             linear_dropout, char_vocab_size, char_embed_dim, dist_fn, 
-            learning_rate):
+            learning_rate, binary):
 
         super(DrugModel, self).__init__()
 
@@ -22,6 +22,7 @@ class DrugModel(nn.Module):
         self.lstm_dim = lstm_dim
         self.lstm_layer = lstm_layer
         self.dist_fn = dist_fn
+        self.binary = binary
 
         # Basic modules
         self.char_embed = nn.Embedding(char_vocab_size, char_embed_dim, 
@@ -35,10 +36,11 @@ class DrugModel(nn.Module):
 
         # Get params and register optimizer
         info, params = self.get_model_params()
-        # self.optimizer = optim.RMSprop(params, lr=learning_rate,
-        #         alpha=0.95, momentum=0.9, eps=1e-10)
         self.optimizer = optim.Adam(params, lr=learning_rate)
-        self.criterion = nn.MSELoss()
+        if binary:
+            self.criterion = nn.BCELoss()
+        else:
+            self.criterion = nn.MSELoss()
         print(info)
 
     def init_lstm_h(self, batch_size):
@@ -78,22 +80,29 @@ class DrugModel(nn.Module):
         lstm_out = lstm_out.contiguous().view(-1, self.lstm_dim)
 
         # Select length
-        input_lens = (torch.arange(0, inputs.size(0)).type(torch.LongTensor)
+        input_lens = (torch.arange(0, inputs.size(0)).long()
                 * maxlen + length - 1).cuda()
         selected = lstm_out[input_lens,:]
         return selected
     
     # Calculate similarity score of vec1 and vec2
     def distance_layer(self, vec1, vec2, distance='l1'):
+        if self.binary:
+            nonl = F.sigmoid
+            mul = 1
+        else:
+            nonl = F.tanh
+            mul = 1
+
         if distance == 'cos':
-            similarity = F.cosine_similarity(
-                    vec1 + 1e-16, vec2 + 1e-16, dim=-1)
+            similarity = nonl(F.cosine_similarity(
+                    vec1 + 1e-16, vec2 + 1e-16, dim=-1))
         elif distance == 'l1':
-            similarity = F.tanh(self.dist_fc(torch.abs(vec1 - vec2)))
-            similarity = similarity.squeeze(1) * 100
+            similarity = nonl(self.dist_fc(torch.abs(vec1 - vec2))) * mul
+            similarity = similarity.squeeze(1)
         elif distance == 'l2':
-            similarity = F.tanh(self.dist_fc(torch.abs((vec1 - vec2) ** 2)))
-            similarity = similarity.squeeze(1) * 100
+            similarity = nonl(self.dist_fc(torch.abs((vec1 - vec2) ** 2))) * mul
+            similarity = similarity.squeeze(1)
 
         return similarity
 
@@ -101,7 +110,6 @@ class DrugModel(nn.Module):
         embed1 = self.siamese_network(key1, key1_len) 
         embed2 = self.siamese_network(key2, key2_len)
         similarity = self.distance_layer(embed1, embed2, self.dist_fn)
-
         return similarity, embed1, embed2
     
     def get_loss(self, outputs, targets):

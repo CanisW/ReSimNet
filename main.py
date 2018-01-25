@@ -27,10 +27,10 @@ LOGGER = logging.getLogger(__name__)
 argparser = argparse.ArgumentParser()
 argparser.add_argument('--task_type', type=str, default='drug')
 argparser.add_argument('--data_path', type=str, 
-        # default='./tasks/data/drug/drug(smiles_uu).pkl')
-        # default='./tasks/data/drug/drug(inchikey_uu).pkl')
-        default='./tasks/data/drug/cscore(inchikey).pkl')
-        # default='./tasks/data/drug/cscore(smiles).pkl')
+        # default='./tasks/data/drug/cscore(inchikey).pkl')
+        # default='./tasks/data/drug/cscore(inchikey_kk).pkl')
+        default='./tasks/data/drug/cscore(smiles).pkl')
+        # default='./tasks/data/drug/cscore(smiles_kk).pkl')
 argparser.add_argument('--checkpoint_dir', type=str, default='./results/')
 argparser.add_argument('--model_name', type=str, default='model.pth')
 argparser.add_argument('--print_step', type=float, default=10)
@@ -42,6 +42,7 @@ argparser.add_argument('--debug', action='store_true', default=False)
 argparser.add_argument('--save_embed', action='store_true', default=False)
 
 # train config
+argparser.add_argument('--binary', type=int, default=1)
 argparser.add_argument('--batch_size', type=int, default=32)
 argparser.add_argument('--epoch', type=int, default=100)
 argparser.add_argument('--learning_rate', type=float, default=1e-3)
@@ -52,10 +53,9 @@ argparser.add_argument('--grad_clip', type=int, default=10)
 # model config
 argparser.add_argument('--lstm_dim', type=int, default=80)
 argparser.add_argument('--lstm_layer', type=int, default=1)
-argparser.add_argument('--lstm_dr', type=int, default=0.5)
-argparser.add_argument('--linear_dr', type=int, default=0.5)
+argparser.add_argument('--lstm_dr', type=int, default=0.0)
+argparser.add_argument('--linear_dr', type=int, default=0.0)
 argparser.add_argument('--char_embed_dim', type=int, default=15)
-argparser.add_argument('--key_embed_dim', type=int, default=50)
 argparser.add_argument('--sim_idx', type=int, default=0)
 argparser.add_argument('--dist_fn', type=str, default='l2')
 argparser.add_argument('--seed', type=int, default=1000)
@@ -70,6 +70,7 @@ if not os.path.exists(args.checkpoint_dir):
 
 # save and load model during experiments
 def run_experiment(model, dataset, run_fn, args):
+    key2vec = {}
     if args.train:
         if args.resume:
             model.load_checkpoint(args.checkpoint_dir, args.model_name)
@@ -78,12 +79,12 @@ def run_experiment(model, dataset, run_fn, args):
         for ep in range(args.epoch):
             print('- Training Epoch %d' % (ep+1))
             dataset.set_mode('tr')
-            run_fn(model, dataset, args, train=True)
+            run_fn(model, dataset, args, key2vec, train=True)
 
             if args.valid:
                 print('- Validation')
                 dataset.set_mode('va')
-                curr = run_fn(model, dataset, args, train=False)
+                curr = run_fn(model, dataset, args, key2vec, train=False)
                 if not args.resume and curr > best:
                     best = curr
                     model.save_checkpoint({
@@ -97,7 +98,7 @@ def run_experiment(model, dataset, run_fn, args):
         if args.train or args.resume:
             model.load_checkpoint(args.checkpoint_dir, args.model_name)
         dataset.set_mode('te')
-        run_fn(model, dataset, args, train=False)
+        run_fn(model, dataset, args, key2vec, train=False)
         # print_prof_data()
         print()
 
@@ -123,7 +124,8 @@ def get_model(args, dataset):
                           len(dataset.char2idx),
                           args.char_embed_dim,
                           args.dist_fn,
-                          args.learning_rate).cuda()
+                          args.learning_rate,
+                          args.binary).cuda()
     return model
 
 
