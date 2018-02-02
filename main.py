@@ -27,10 +27,7 @@ LOGGER = logging.getLogger(__name__)
 argparser = argparse.ArgumentParser()
 argparser.add_argument('--task_type', type=str, default='drug')
 argparser.add_argument('--data_path', type=str, 
-        # default='./tasks/data/drug/cscore(inchikey).pkl')
-        # default='./tasks/data/drug/cscore(inchikey_kk).pkl')
-        default='./tasks/data/drug/cscore(smiles).pkl')
-        # default='./tasks/data/drug/cscore(smiles_kk).pkl')
+        default='./tasks/data/drug/drug(v0.3).pkl')
 argparser.add_argument('--checkpoint_dir', type=str, default='./results/')
 argparser.add_argument('--model_name', type=str, default='model.pth')
 argparser.add_argument('--print_step', type=float, default=10)
@@ -56,7 +53,8 @@ argparser.add_argument('--lstm_layer', type=int, default=1)
 argparser.add_argument('--lstm_dr', type=int, default=0.0)
 argparser.add_argument('--linear_dr', type=int, default=0.0)
 argparser.add_argument('--char_embed_dim', type=int, default=15)
-argparser.add_argument('--sim_idx', type=int, default=0)
+argparser.add_argument('--s_idx', type=int, default=1)
+argparser.add_argument('--rep_idx', type=int, default=0)
 argparser.add_argument('--dist_fn', type=str, default='l2')
 argparser.add_argument('--seed', type=int, default=1000)
 
@@ -78,12 +76,12 @@ def run_experiment(model, dataset, run_fn, args):
         best = 0.0
         for ep in range(args.epoch):
             print('- Training Epoch %d' % (ep+1))
-            dataset.set_mode('tr')
+            dataset.set_mode('tr', args.rep_idx)
             run_fn(model, dataset, args, key2vec, train=True)
 
             if args.valid:
                 print('- Validation')
-                dataset.set_mode('va')
+                dataset.set_mode('va', args.rep_idx)
                 curr = run_fn(model, dataset, args, key2vec, train=False)
                 if not args.resume and curr > best:
                     best = curr
@@ -97,7 +95,7 @@ def run_experiment(model, dataset, run_fn, args):
         print('- Load Validation/Testing')
         if args.train or args.resume:
             model.load_checkpoint(args.checkpoint_dir, args.model_name)
-        dataset.set_mode('te')
+        dataset.set_mode('te', args.rep_idx)
         run_fn(model, dataset, args, key2vec, train=False)
         # print_prof_data()
         print()
@@ -118,14 +116,16 @@ def get_run_fn(task_type):
 
 def get_model(args, dataset):
     if args.task_type == 'drug':
-        model = DrugModel(1, args.lstm_dim,
-                          args.lstm_layer,
-                          args.lstm_dr, args.linear_dr,
-                          len(dataset.char2idx),
-                          args.char_embed_dim,
-                          args.dist_fn,
-                          args.learning_rate,
-                          args.binary).cuda()
+        model = DrugModel(output_dim=1, 
+                          lstm_dim=args.lstm_dim,
+                          lstm_layer=args.lstm_layer,
+                          lstm_dropout=args.lstm_dr,
+                          linear_dropout=args.linear_dr,
+                          char_vocab_size=len(dataset.schar2idx),
+                          char_embed_dim=args.char_embed_dim,
+                          dist_fn=args.dist_fn,
+                          learning_rate=args.learning_rate,
+                          binary=args.binary).cuda()
     return model
 
 

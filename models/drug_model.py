@@ -89,19 +89,17 @@ class DrugModel(nn.Module):
     def distance_layer(self, vec1, vec2, distance='l1'):
         if self.binary:
             nonl = F.sigmoid
-            mul = 1
         else:
             nonl = F.tanh
-            mul = 1
 
         if distance == 'cos':
             similarity = nonl(F.cosine_similarity(
                     vec1 + 1e-16, vec2 + 1e-16, dim=-1))
         elif distance == 'l1':
-            similarity = nonl(self.dist_fc(torch.abs(vec1 - vec2))) * mul
+            similarity = nonl(self.dist_fc(torch.abs(vec1 - vec2)))
             similarity = similarity.squeeze(1)
         elif distance == 'l2':
-            similarity = nonl(self.dist_fc(torch.abs((vec1 - vec2) ** 2))) * mul
+            similarity = nonl(self.dist_fc(torch.abs((vec1 - vec2) ** 2)))
             similarity = similarity.squeeze(1)
 
         return similarity

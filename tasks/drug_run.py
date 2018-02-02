@@ -40,22 +40,21 @@ def run_drug(model, dataset, args, key2vec, train=False):
     start_time = datetime.now()
     dataset.shuffle()
 
-    for k1, k1_l, k2, k2_l, sim in dataset.loader(
-                                            args.batch_size, args.sim_idx):
+    for d1, d1_r, d1_l, d2, d2_r, d2_l, score in dataset.loader(
+                                                 args.batch_size, args.s_idx):
 
         # Split for KK/KU/UU sets
-        k1, k1_l, k2, k2_l, sim  = (np.array(xx) for xx 
-                                            in [k1, k1_l, k2, k2_l, sim])
-        key1 = [''.join(list(map(lambda x: dataset.idx2char[x], ks1[:ks1_l])))
-                for ks1, ks1_l in zip(k1, k1_l)]
-        key2 = [''.join(list(map(lambda x: dataset.idx2char[x], ks2[:ks2_l])))
-                for ks2, ks2_l in zip(k2, k2_l)]
+        d1_r, d1_l, d2_r, d2_l, score  = (np.array(xx) for xx 
+                                          in [d1_r, d1_l, d2_r, d2_l, score])
         kk_idx = np.argwhere([a in dataset.known and b in dataset.known
-                              for a, b in zip(key1, key2)]).flatten()
+                              for a, b in zip(d1, d2)]).flatten()
         ku_idx = np.argwhere([(a in dataset.unknown) != (b in dataset.unknown)
-                              for a, b in zip(key1, key2)]).flatten()
+                              for a, b in zip(d1, d2)]).flatten()
         uu_idx = np.argwhere([a in dataset.unknown and b in dataset.unknown
-                              for a, b in zip(key1, key2)]).flatten()
+                              for a, b in zip(d1, d2)]).flatten()
+        print(kk_idx)
+        print(ku_idx)
+        print(uu_idx)
         assert len(kk_idx) + len(ku_idx) + len(uu_idx) == len(k1)
 
         # Binarize similarity
