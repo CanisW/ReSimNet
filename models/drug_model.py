@@ -12,14 +12,14 @@ from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 
 
 class DrugModel(nn.Module):
-    def __init__(self, input_dim, output_dim, hidden_dim, lstm_dim, lstm_layer,
-            lstm_dropout, linear_dropout, char_vocab_size, char_embed_dim, 
-            dist_fn, learning_rate, binary, is_mlp):
+    def __init__(self, input_dim, output_dim, hidden_dim, drug_embed_dim,
+            lstm_layer, lstm_dropout, linear_dropout, char_vocab_size, 
+            char_embed_dim, dist_fn, learning_rate, binary, is_mlp):
 
         super(DrugModel, self).__init__()
 
         # Save model configs
-        self.lstm_dim = lstm_dim
+        self.drug_embed_dim = drug_embed_dim
         self.lstm_layer = lstm_layer
         self.dist_fn = dist_fn
         self.binary = binary
@@ -29,20 +29,20 @@ class DrugModel(nn.Module):
         if not is_mlp:
             self.char_embed = nn.Embedding(char_vocab_size, char_embed_dim, 
                                            padding_idx=0)
-            self.lstm = nn.LSTM(char_embed_dim, lstm_dim, lstm_layer,
+            self.lstm = nn.LSTM(char_embed_dim, drug_embed_dim, lstm_layer,
                                 batch_first=True, dropout=lstm_dropout)
         # For rep_ix 2, 3
         else:
             self.fc1 = nn.Sequential(
                             nn.Linear(input_dim, hidden_dim),
                             nn.Sigmoid(),
-                            nn.Linear(hidden_dim, lstm_dim),
+                            nn.Linear(hidden_dim, drug_embed_dim),
                             nn.Sigmoid()
                        )
 
         self.dist_fc = nn.Sequential(
                             nn.Dropout(linear_dropout),
-                            nn.Linear(lstm_dim, 1)
+                            nn.Linear(drug_embed_dim, 1)
                        )
 
         # Get params and register optimizer
@@ -56,9 +56,9 @@ class DrugModel(nn.Module):
 
     def init_lstm_h(self, batch_size):
         return (Variable(torch.zeros(
-            self.lstm_layer*1, batch_size, self.lstm_dim)).cuda(),
+            self.lstm_layer*1, batch_size, self.drug_embed_dim)).cuda(),
                 Variable(torch.zeros(
-            self.lstm_layer*1, batch_size, self.lstm_dim)).cuda())
+            self.lstm_layer*1, batch_size, self.drug_embed_dim)).cuda())
 
     # Set Siamese network as basic LSTM
     def siamese_sequence(self, inputs, length):
@@ -88,7 +88,7 @@ class DrugModel(nn.Module):
         c_pad, _ = pad_packed_sequence(lstm_out, batch_first=True)
         lstm_out = c_pad.index_select(0, Variable(unsort_idx).cuda())
         '''
-        lstm_out = lstm_out.contiguous().view(-1, self.lstm_dim)
+        lstm_out = lstm_out.contiguous().view(-1, self.drug_embed_dim)
 
         # Select length
         input_lens = (torch.arange(0, inputs.size(0)).long()

@@ -48,7 +48,7 @@ argparser.add_argument('--grad_clip', type=int, default=10)
 # model config
 argparser.add_argument('--binary', type=int, default=1)
 argparser.add_argument('--hidden_dim', type=int, default=200)
-argparser.add_argument('--lstm_dim', type=int, default=80)
+argparser.add_argument('--drug_embed_dim', type=int, default=80)
 argparser.add_argument('--lstm_layer', type=int, default=1)
 argparser.add_argument('--lstm_dr', type=int, default=0.0)
 argparser.add_argument('--linear_dr', type=int, default=0.0)
@@ -114,7 +114,7 @@ def get_model(args, dataset):
     model = DrugModel(input_dim=dataset.input_dim,
                       output_dim=1, 
                       hidden_dim=args.hidden_dim,
-                      lstm_dim=args.lstm_dim,
+                      drug_embed_dim=args.drug_embed_dim,
                       lstm_layer=args.lstm_layer,
                       lstm_dropout=args.lstm_dr,
                       linear_dropout=args.linear_dr,
