@@ -68,6 +68,7 @@ def run_drug(model, dataset, args, train=False):
         # Calculate corref
         tmp_tar = score.data.cpu().numpy()
         tmp_pred = outputs.data.cpu().numpy()
+        # print(tmp_tar[:10], tmp_pred[:10])
 
         # Metrics are different for regression and binary
         if not args.binary:
@@ -133,8 +134,8 @@ def run_drug(model, dataset, args, train=False):
 
     # End of an epoch
     et = (datetime.now() - start_time).total_seconds()
-    print('\n\ttotal metrics:\t' + str([float('{:.3f}'.format(
-        sum(tm)/(len(tm) + 1e-16))) for tm in total_metrics]))
+    print('\n\ttotal metrics:\t' + '\t'.join(['{:.3f}'.format(
+        sum(tm)/(len(tm) + 1e-16)) for tm in total_metrics]))
 
     if not args.binary:
         print('\tpearson correlation: {:.3f}\t'.format(corref))
@@ -159,6 +160,7 @@ def save_drug(model, dataset, args):
 
         # Real valued for mol2vec
         if dataset._rep_idx != 3:
+            # TODO: transform to indexes for rep_idx 0, 1
             d1_r = Variable(torch.LongTensor(d1_r)).cuda()
         else:
             d1_r = Variable(torch.FloatTensor(d1_r)).cuda()
@@ -169,7 +171,7 @@ def save_drug(model, dataset, args):
         # Run model amd save embed
         _, embed1, embed2 = model(d1_r, d1_l, d1_r, d1_l)
         assert embed1.data.tolist() == embed2.data.tolist()
-        key2vec[drug] = embed1.data.tolist()
+        key2vec[drug] = embed1.squeeze(0).data.tolist()
 
         # Print progress
         _progress = progress(idx, len(dataset.drugs))

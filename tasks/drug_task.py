@@ -238,7 +238,7 @@ class DrugDataset(object):
             drug1_len = 0
             drug2_len = 0
 
-            # Smiles
+            # Smiles (TODO: merge schar, ichar, len)
             if rep_idx == 0:
                 drug1_rep = list(map(lambda x: self.schar2idx[x], drug1_rep))
                 drug1_len = len(drug1_rep)

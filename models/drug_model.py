@@ -36,8 +36,7 @@ class DrugModel(nn.Module):
             self.fc1 = nn.Sequential(
                             nn.Linear(input_dim, hidden_dim),
                             nn.Sigmoid(),
-                            nn.Linear(hidden_dim, drug_embed_dim),
-                            nn.Sigmoid()
+                            nn.Linear(hidden_dim, drug_embed_dim)
                        )
 
         self.dist_fc = nn.Sequential(
