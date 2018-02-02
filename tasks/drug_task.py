@@ -119,7 +119,7 @@ class DrugDataset(object):
                 drug1 = row[1]
                 drug2 = row[2]
                 score = float(row[3])
-                target = int(row[4])
+                target = float(row[4])
                 assert drug1 in self.drugs and drug2 in self.drugs
 
                 # Save each drug and scores
@@ -307,7 +307,7 @@ class DrugDataset(object):
         elif self._rep_idx == 1:
             return self.ichar2idx
         else:
-            return None
+            return {}  
 
     @property
     def idx2char(self):
@@ -316,7 +316,20 @@ class DrugDataset(object):
         elif self._rep_idx == 1:
             return self.idx2ichar
         else:
-            return None
+            return {}
+
+    @property
+    def input_dim(self):
+        if self._rep_idx == 0:
+            return len(self.idx2schar)
+        elif self._rep_idx == 1:
+            return len(self.idx2ichar)
+        elif self._rep_idx == 2:
+            return 2048
+        elif self._rep_idx == 3:
+            return 300
+        else:
+            assert False, 'Wrong rep_idx {}'.format(rep_idx)
 
 """
 [Version Note]

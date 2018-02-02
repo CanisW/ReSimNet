@@ -52,24 +52,19 @@ def run_drug(model, dataset, args, key2vec, train=False):
                               for a, b in zip(d1, d2)]).flatten()
         uu_idx = np.argwhere([a in dataset.unknown and b in dataset.unknown
                               for a, b in zip(d1, d2)]).flatten()
-        print(kk_idx)
-        print(ku_idx)
-        print(uu_idx)
-        assert len(kk_idx) + len(ku_idx) + len(uu_idx) == len(k1)
-
-        # Binarize similarity
-        if args.binary:
-            sim = np.array([float(s > 0) for s in sim])
-        else:
-            if 'cscore' in args.data_path:
-                sim = np.array([float(s / 100) for s in sim])
+        assert len(kk_idx) + len(ku_idx) + len(uu_idx) == len(d1)
 
         # Wrap as Tensor/Variable
-        k1 = Variable(torch.LongTensor(k1)).cuda()
-        k2 = Variable(torch.LongTensor(k2)).cuda()
-        k1_l = torch.LongTensor(k1_l)
-        k2_l = torch.LongTensor(k2_l)
-        sim = Variable(torch.FloatTensor(sim)).cuda()
+        if dataset._rep_idx != 3: # real valued for mol2vec
+            d1_r = Variable(torch.LongTensor(d1_r)).cuda()
+            d2_r = Variable(torch.LongTensor(d2_r)).cuda()
+        else:
+            d1_r = Variable(torch.FloatTensor(d1_r)).cuda()
+            d2_r = Variable(torch.FloatTensor(d2_r)).cuda()
+        d1_l = torch.LongTensor(d1_l)
+        d2_l = torch.LongTensor(d2_l)
+        score = [float(s > 0) for s in score]
+        score = Variable(torch.FloatTensor(score)).cuda()
 
         # Grad zero + mode change
         model.optimizer.zero_grad()
@@ -77,17 +72,17 @@ def run_drug(model, dataset, args, key2vec, train=False):
         else: model.eval()
 
         # Get outputs
-        outputs, embed1, embed2 = model(k1, k1_l, k2, k2_l)
+        outputs, embed1, embed2 = model(d1_r, d1_l, d2_r, d2_l)
         if args.save_embed:
-            register_key(key1, embed1, key2vec)
-            register_key(key2, embed2, key2vec)
-        loss = model.get_loss(outputs, sim)
+            register_key(d1, embed1, key2vec)
+            register_key(d2, embed2, key2vec)
+        loss = model.get_loss(outputs, score)
         total_metrics[0] += [loss.data[0]]
         total_step += 1.0
-        d_idx = (total_step - 1) * args.batch_size + k1.size(0)
+        d_idx = (total_step - 1) * args.batch_size + len(d1)
 
         # Calculate corref
-        tmp_tar = sim.data.cpu().numpy()
+        tmp_tar = score.data.cpu().numpy()
         tmp_pred = outputs.data.cpu().numpy()
 
         # Metrics are different for regression and binary

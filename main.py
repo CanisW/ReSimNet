@@ -25,7 +25,6 @@ LOGGER = logging.getLogger(__name__)
 
 # run settings
 argparser = argparse.ArgumentParser()
-argparser.add_argument('--task_type', type=str, default='drug')
 argparser.add_argument('--data_path', type=str, 
         default='./tasks/data/drug/drug(v0.3).pkl')
 argparser.add_argument('--checkpoint_dir', type=str, default='./results/')
@@ -39,7 +38,6 @@ argparser.add_argument('--debug', action='store_true', default=False)
 argparser.add_argument('--save_embed', action='store_true', default=False)
 
 # train config
-argparser.add_argument('--binary', type=int, default=1)
 argparser.add_argument('--batch_size', type=int, default=32)
 argparser.add_argument('--epoch', type=int, default=100)
 argparser.add_argument('--learning_rate', type=float, default=1e-3)
@@ -48,6 +46,8 @@ argparser.add_argument('--grad_max_norm', type=int, default=10)
 argparser.add_argument('--grad_clip', type=int, default=10)
 
 # model config
+argparser.add_argument('--binary', type=int, default=1)
+argparser.add_argument('--hidden_dim', type=int, default=200)
 argparser.add_argument('--lstm_dim', type=int, default=80)
 argparser.add_argument('--lstm_layer', type=int, default=1)
 argparser.add_argument('--lstm_dr', type=int, default=0.0)
@@ -55,7 +55,7 @@ argparser.add_argument('--linear_dr', type=int, default=0.0)
 argparser.add_argument('--char_embed_dim', type=int, default=15)
 argparser.add_argument('--s_idx', type=int, default=1)
 argparser.add_argument('--rep_idx', type=int, default=0)
-argparser.add_argument('--dist_fn', type=str, default='l2')
+argparser.add_argument('--dist_fn', type=str, default='cos')
 argparser.add_argument('--seed', type=int, default=1000)
 
 args = argparser.parse_args()
@@ -101,31 +101,29 @@ def run_experiment(model, dataset, run_fn, args):
         print()
 
 
-def get_dataset(task_type):
-    if task_type == 'drug':
-        dataset =  pickle.load(open(args.data_path, 'rb'))
-
-    LOGGER.info("Ready for the task: %s", task_type)
-    return dataset
+def get_dataset(path):
+    return pickle.load(open(path, 'rb'))
 
 
-def get_run_fn(task_type):
-    if task_type == 'drug':
-        return run_drug
+def get_run_fn():
+    return run_drug
 
 
 def get_model(args, dataset):
-    if args.task_type == 'drug':
-        model = DrugModel(output_dim=1, 
-                          lstm_dim=args.lstm_dim,
-                          lstm_layer=args.lstm_layer,
-                          lstm_dropout=args.lstm_dr,
-                          linear_dropout=args.linear_dr,
-                          char_vocab_size=len(dataset.schar2idx),
-                          char_embed_dim=args.char_embed_dim,
-                          dist_fn=args.dist_fn,
-                          learning_rate=args.learning_rate,
-                          binary=args.binary).cuda()
+    dataset.set_mode('invalid', args.rep_idx)
+    model = DrugModel(input_dim=dataset.input_dim,
+                      output_dim=1, 
+                      hidden_dim=args.hidden_dim,
+                      lstm_dim=args.lstm_dim,
+                      lstm_layer=args.lstm_layer,
+                      lstm_dropout=args.lstm_dr,
+                      linear_dropout=args.linear_dr,
+                      char_vocab_size=len(dataset.char2idx),
+                      char_embed_dim=args.char_embed_dim,
+                      dist_fn=args.dist_fn,
+                      learning_rate=args.learning_rate,
+                      binary=args.binary,
+                      is_mlp=args.rep_idx > 1).cuda()
     return model
 
 
@@ -152,8 +150,8 @@ def main():
     init_seed(args.seed)
 
     # Get datset, run function, model
-    dataset = get_dataset(args.task_type)
-    run_fn = get_run_fn(args.task_type)
+    dataset = get_dataset(args.data_path)
+    run_fn = get_run_fn()
     model = get_model(args, dataset)
 
     # Run experiment

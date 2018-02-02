@@ -12,9 +12,9 @@ from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 
 
 class DrugModel(nn.Module):
-    def __init__(self, output_dim, lstm_dim, lstm_layer, lstm_dropout, 
-            linear_dropout, char_vocab_size, char_embed_dim, dist_fn, 
-            learning_rate, binary):
+    def __init__(self, input_dim, output_dim, hidden_dim, lstm_dim, lstm_layer,
+            lstm_dropout, linear_dropout, char_vocab_size, char_embed_dim, 
+            dist_fn, learning_rate, binary, is_mlp):
 
         super(DrugModel, self).__init__()
 
@@ -23,12 +23,23 @@ class DrugModel(nn.Module):
         self.lstm_layer = lstm_layer
         self.dist_fn = dist_fn
         self.binary = binary
+        self.is_mlp = is_mlp
 
-        # Basic modules
-        self.char_embed = nn.Embedding(char_vocab_size, char_embed_dim, 
-                                       padding_idx=0)
-        self.lstm = nn.LSTM(char_embed_dim, lstm_dim, lstm_layer,
-                            batch_first=True, dropout=lstm_dropout)
+        # For rep_idx 0, 1
+        if not is_mlp:
+            self.char_embed = nn.Embedding(char_vocab_size, char_embed_dim, 
+                                           padding_idx=0)
+            self.lstm = nn.LSTM(char_embed_dim, lstm_dim, lstm_layer,
+                                batch_first=True, dropout=lstm_dropout)
+        # For rep_ix 2, 3
+        else:
+            self.fc1 = nn.Sequential(
+                            nn.Linear(input_dim, hidden_dim),
+                            nn.Sigmoid(),
+                            nn.Linear(hidden_dim, lstm_dim),
+                            nn.Sigmoid()
+                       )
+
         self.dist_fc = nn.Sequential(
                             nn.Dropout(linear_dropout),
                             nn.Linear(lstm_dim, 1)
@@ -50,7 +61,7 @@ class DrugModel(nn.Module):
             self.lstm_layer*1, batch_size, self.lstm_dim)).cuda())
 
     # Set Siamese network as basic LSTM
-    def siamese_network(self, inputs, length):
+    def siamese_sequence(self, inputs, length):
         # Character embedding
         c_embed = self.char_embed(inputs)
 
@@ -85,6 +96,9 @@ class DrugModel(nn.Module):
         selected = lstm_out[input_lens,:]
         return selected
     
+    def siamese_basic(self, inputs):
+        return self.fc1(inputs.float())
+    
     # Calculate similarity score of vec1 and vec2
     def distance_layer(self, vec1, vec2, distance='l1'):
         if self.binary:
@@ -105,8 +119,13 @@ class DrugModel(nn.Module):
         return similarity
 
     def forward(self, key1, key1_len, key2, key2_len):
-        embed1 = self.siamese_network(key1, key1_len) 
-        embed2 = self.siamese_network(key2, key2_len)
+        if not self.is_mlp:
+            embed1 = self.siamese_sequence(key1, key1_len) 
+            embed2 = self.siamese_sequence(key2, key2_len)
+        else: 
+            embed1 = self.siamese_basic(key1)
+            embed2 = self.siamese_basic(key2)
+
         similarity = self.distance_layer(embed1, embed2, self.dist_fn)
         return similarity, embed1, embed2
     
