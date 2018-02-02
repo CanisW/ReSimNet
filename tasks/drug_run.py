@@ -12,21 +12,8 @@ from torch.autograd import Variable
 from models.root.utils import *
 
 
-# Register each key embedding
-def register_key(key, embed, dictionary):
-    assert len(key) == len(embed)
-    for k, emb in zip(key, embed):
-        if k in dictionary:
-            # assert dictionary[chars] == emb.data.tolist()
-            if dictionary[k] != emb.data.tolist():
-                print('diff', sum(np.array(dictionary[k])) \
-                        - sum(np.array(emb.data.tolist())))
-            continue
-        dictionary[k] = emb.data.tolist()
-
-
-# run a single epoch
-def run_drug(model, dataset, args, key2vec, train=False):
+# Run a single epoch
+def run_drug(model, dataset, args, train=False):
     total_step = 0.0
     total_metrics = [[],[],[],[],[]]
     tar_set = []
@@ -73,9 +60,6 @@ def run_drug(model, dataset, args, key2vec, train=False):
 
         # Get outputs
         outputs, embed1, embed2 = model(d1_r, d1_l, d2_r, d2_l)
-        if args.save_embed:
-            register_key(d1, embed1, key2vec)
-            register_key(d2, embed2, key2vec)
         loss = model.get_loss(outputs, score)
         total_metrics[0] += [loss.data[0]]
         total_step += 1.0
@@ -157,14 +141,44 @@ def run_drug(model, dataset, args, key2vec, train=False):
         print('\tKK, KU, UU correlation: {:.3f}/{:.3f}/{:.3f}\t'.format(
               corref_kk, corref_ku, corref_uu))
 
-    # Save embed as pickle
-    if args.save_embed:
-        pickle.dump(key2vec, open('{}embed_{}.pkl'.format(
-                    args.checkpoint_dir, args.model_name), 'wb'), protocol=2)
-        print('{} number of unique keys saved.'.format(len(key2vec)))
 
     if not args.binary:
         return corref
     else:
         return sum(total_metrics[1]) / len(total_metrics[1])
+
+
+def save_drug(model, dataset, args):
+    model.eval()
+    key2vec = {}
+
+    # Iterate drug dictionary
+    for idx, (drug, reps) in enumerate(dataset.drugs.items()):
+        d1_r = reps[args.rep_idx]
+        d1_l = len(d1_r)
+
+        # Real valued for mol2vec
+        if dataset._rep_idx != 3:
+            d1_r = Variable(torch.LongTensor(d1_r)).cuda()
+        else:
+            d1_r = Variable(torch.FloatTensor(d1_r)).cuda()
+        d1_l = torch.LongTensor(d1_l)
+        d1_r = d1_r.unsqueeze(0)
+        d1_l = d1_l.unsqueeze(0)
+
+        # Run model amd save embed
+        _, embed1, embed2 = model(d1_r, d1_l, d1_r, d1_l)
+        assert embed1.data.tolist() == embed2.data.tolist()
+        key2vec[drug] = embed1.data.tolist()
+
+        # Print progress
+        _progress = progress(idx, len(dataset.drugs))
+        _progress += 'saving drug embeddings..'
+        sys.stdout.write(_progress)
+        sys.stdout.flush()
+
+    # Save embed as pickle
+    pickle.dump(key2vec, open('{}embed_{}.pkl'.format(
+                args.checkpoint_dir, args.model_name), 'wb'), protocol=2)
+    print('\n\t{} number of unique drugs saved.'.format(len(key2vec)))
 

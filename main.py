@@ -14,7 +14,7 @@ from datetime import datetime
 from torch.autograd import Variable
 
 from tasks.drug_task import DrugDataset
-from tasks.drug_run import run_drug
+from tasks.drug_run import run_drug, save_drug
 from models.drug_model import DrugModel
 
 from models.root.utils import *
@@ -23,7 +23,7 @@ from models.root.utils import *
 LOGGER = logging.getLogger(__name__)
 
 
-# run settings
+# Run settings
 argparser = argparse.ArgumentParser()
 argparser.add_argument('--data_path', type=str, 
         default='./tasks/data/drug/drug(v0.3).pkl')
@@ -37,7 +37,7 @@ argparser.add_argument('--resume', action='store_true', default=False)
 argparser.add_argument('--debug', action='store_true', default=False)
 argparser.add_argument('--save_embed', action='store_true', default=False)
 
-# train config
+# Train config
 argparser.add_argument('--batch_size', type=int, default=32)
 argparser.add_argument('--epoch', type=int, default=100)
 argparser.add_argument('--learning_rate', type=float, default=1e-3)
@@ -45,10 +45,10 @@ argparser.add_argument('--weight_decay', type=float, default=0)
 argparser.add_argument('--grad_max_norm', type=int, default=10)
 argparser.add_argument('--grad_clip', type=int, default=10)
 
-# model config
+# Model config
 argparser.add_argument('--binary', type=int, default=1)
 argparser.add_argument('--hidden_dim', type=int, default=200)
-argparser.add_argument('--drug_embed_dim', type=int, default=80)
+argparser.add_argument('--drug_embed_dim', type=int, default=300)
 argparser.add_argument('--lstm_layer', type=int, default=1)
 argparser.add_argument('--lstm_dr', type=int, default=0.0)
 argparser.add_argument('--linear_dr', type=int, default=0.0)
@@ -61,14 +61,20 @@ argparser.add_argument('--seed', type=int, default=1000)
 args = argparser.parse_args()
 
 
-# create dirs
+# Create dirs
 if not os.path.exists(args.checkpoint_dir):
     os.makedirs(args.checkpoint_dir)
 
 
-# save and load model during experiments
 def run_experiment(model, dataset, run_fn, args):
-    key2vec = {}
+    
+    # Save embeddings and exit
+    if args.save_embed:
+        model.load_checkpoint(args.checkpoint_dir, args.model_name)
+        save_drug(model, dataset, args) 
+        sys.exit()
+
+    # Save and load model during experiments
     if args.train:
         if args.resume:
             model.load_checkpoint(args.checkpoint_dir, args.model_name)
@@ -77,12 +83,12 @@ def run_experiment(model, dataset, run_fn, args):
         for ep in range(args.epoch):
             print('- Training Epoch %d' % (ep+1))
             dataset.set_mode('tr', args.rep_idx)
-            run_fn(model, dataset, args, key2vec, train=True)
+            run_fn(model, dataset, args, train=True)
 
             if args.valid:
                 print('- Validation')
                 dataset.set_mode('va', args.rep_idx)
-                curr = run_fn(model, dataset, args, key2vec, train=False)
+                curr = run_fn(model, dataset, args, train=False)
                 if not args.resume and curr > best:
                     best = curr
                     model.save_checkpoint({
@@ -96,8 +102,8 @@ def run_experiment(model, dataset, run_fn, args):
         if args.train or args.resume:
             model.load_checkpoint(args.checkpoint_dir, args.model_name)
         dataset.set_mode('te', args.rep_idx)
-        run_fn(model, dataset, args, key2vec, train=False)
-        # print_prof_data()
+        run_fn(model, dataset, args, train=False)
+        save_drug(model, dataset, args) 
         print()
 
 
