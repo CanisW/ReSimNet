@@ -158,6 +158,8 @@ def save_drug(model, dataset, args):
         d1_r = reps[args.rep_idx]
         d1_l = len(d1_r)
 
+        # TODO: Known / Unknown Label
+
         # Real valued for mol2vec
         if dataset._rep_idx != 3:
             # TODO: transform to indexes for rep_idx 0, 1
