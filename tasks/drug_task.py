@@ -238,26 +238,17 @@ class DrugDataset(object):
             drug1_len = 0
             drug2_len = 0
 
-            # Smiles (TODO: merge schar, ichar, len)
-            if rep_idx == 0:
-                drug1_rep = list(map(lambda x: self.schar2idx[x], drug1_rep))
+            # Smiles / Inchikey
+            if rep_idx == 0 or rep_idx == 1:
+                drug1_rep = list(map(lambda x: self.char2idx[x], drug1_rep))
                 drug1_len = len(drug1_rep)
-                drug1_rep = self.pad_drug(drug1_rep, self.schar_maxlen, 
-                                          self.schar2idx[self.PAD])
-                drug2_rep = list(map(lambda x: self.schar2idx[x], drug2_rep))
+                drug1_rep = self.pad_drug(drug1_rep, self.char_maxlen, 
+                                          self.char2idx[self.PAD])
+                drug2_rep = list(map(lambda x: self.char2idx[x], drug2_rep))
                 drug2_len = len(drug2_rep)
-                drug2_rep = self.pad_drug(drug2_rep, self.schar_maxlen, 
-                                          self.schar2idx[self.PAD])
-            # Inchikey
-            elif rep_idx == 1:
-                drug1_rep = list(map(lambda x: self.ichar2idx[x], drug1_rep))
-                drug1_len = len(drug1_rep)
-                drug1_rep = self.pad_drug(drug1_rep, self.ichar_maxlen, 
-                                          self.ichar2idx[self.PAD])
-                drug2_rep = list(map(lambda x: self.ichar2idx[x], drug2_rep))
-                drug2_len = len(drug2_rep)
-                drug2_rep = self.pad_drug(drug2_rep, self.ichar_maxlen, 
-                                          self.ichar2idx[self.PAD])
+                drug2_rep = self.pad_drug(drug2_rep, self.char_maxlen, 
+                                          self.char2idx[self.PAD])
+
             # Fingerprint/Mol2vec (2, 3)
             b_drug1.append(drug1)
             b_drug1_rep.append(drug1_rep)
@@ -317,6 +308,15 @@ class DrugDataset(object):
             return self.idx2ichar
         else:
             return {}
+
+    @property
+    def char_maxlen(self):
+        if self._rep_idx == 0:
+            return self.schar_maxlen
+        elif self._rep_idx == 1:
+            return self.ichar_maxlen
+        else:
+            return 0
 
     @property
     def input_dim(self):

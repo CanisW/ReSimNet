@@ -152,34 +152,45 @@ def run_drug(model, dataset, args, train=False):
 def save_drug(model, dataset, args):
     model.eval()
     key2vec = {}
+    unk_cnt = 0
 
     # Iterate drug dictionary
     for idx, (drug, reps) in enumerate(dataset.drugs.items()):
         d1_r = reps[args.rep_idx]
         d1_l = len(d1_r)
 
-        # TODO: Known / Unknown Label
+        # For string data (smiles/inchikey)
+        if args.rep_idx == 0 or args.rep_idx == 1:
+            d1_r = list(map(lambda x: dataset.char2idx[x], d1_r))
+            d1_l = len(d1_r)
+            d1_r = dataset.pad_drug(d1_r, dataset.char_maxlen, 
+                                          dataset.char2idx[dataset.PAD])
 
         # Real valued for mol2vec
         if dataset._rep_idx != 3:
-            # TODO: transform to indexes for rep_idx 0, 1
             d1_r = Variable(torch.LongTensor(d1_r)).cuda()
         else:
             d1_r = Variable(torch.FloatTensor(d1_r)).cuda()
-        d1_l = torch.LongTensor(d1_l)
+        d1_l = torch.LongTensor(np.array([d1_l]))
         d1_r = d1_r.unsqueeze(0)
         d1_l = d1_l.unsqueeze(0)
 
         # Run model amd save embed
         _, embed1, embed2 = model(d1_r, d1_l, d1_r, d1_l)
         assert embed1.data.tolist() == embed2.data.tolist()
-        key2vec[drug] = embed1.squeeze(0).data.tolist()
+        key2vec[drug] = [embed1.squeeze(0).data.tolist(), drug in dataset.known]
+
+        if drug not in dataset.known:
+            assert drug in dataset.unknown
+            unk_cnt += 1
 
         # Print progress
         _progress = progress(idx, len(dataset.drugs))
         _progress += 'saving drug embeddings..'
         sys.stdout.write(_progress)
         sys.stdout.flush()
+
+    assert unk_cnt == len(dataset.unknown)
 
     # Save embed as pickle
     pickle.dump(key2vec, open('{}embed_{}.pkl'.format(
