@@ -178,7 +178,7 @@ def save_drug(model, dataset, args):
         # Run model amd save embed
         _, embed1, embed2 = model(d1_r, d1_l, d1_r, d1_l)
         assert embed1.data.tolist() == embed2.data.tolist()
-        key2vec[drug] = [embed1.squeeze(0).data.tolist(), drug in dataset.known]
+        key2vec[drug] = [embed1.squeeze().data.tolist(), drug in dataset.known]
 
         if drug not in dataset.known:
             assert drug in dataset.unknown
@@ -196,4 +196,3 @@ def save_drug(model, dataset, args):
     pickle.dump(key2vec, open('{}embed_{}.pkl'.format(
                 args.checkpoint_dir, args.model_name), 'wb'), protocol=2)
     print('\n\t{} number of unique drugs saved.'.format(len(key2vec)))
-
