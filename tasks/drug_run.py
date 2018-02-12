@@ -94,24 +94,24 @@ def run_drug(model, loader, dataset, args, train=False):
         if d_idx % args.print_step == 0 or d_idx == (len(loader) - 1):
             et = int((datetime.now() - start_time).total_seconds())
             _progress = (
-                '{}/{} | Loss: {:.3f} | Total Loss: {:.3f} | '.format(
+                '{}/{} | Loss: {:.3f} | Total Acc: {:.3f} | '.format(
                 d_idx + 1, len(loader),
-                sum(total_metrics[0])/(d_idx + 1), 
-                sum(total_metrics[1])/(d_idx + 1)) +
+                sum(total_metrics[0])/len(total_metrics[0]), 
+                sum(total_metrics[1])/(len(total_metrics[1]) + 1e-16)) +
                 'KK: {:.3f} KU: {:.3f} UU: {:.3f} | '.format(
-                sum(total_metrics[2])/(d_idx + 1), 
-                sum(total_metrics[3])/(d_idx + 1),
-                sum(total_metrics[4])/(d_idx + 1)) +
-                'Time: {:2d}:{:2d}:{:2d}'.format(
+                sum(total_metrics[2])/(len(total_metrics[2]) + 1e-16), 
+                sum(total_metrics[3])/(len(total_metrics[3]) + 1e-16),
+                sum(total_metrics[4])/(len(total_metrics[4]) + 1e-16)) +
+                '{:2d}:{:2d}:{:2d}'.format(
                 et//3600, et%3600//60, et%60))
             LOGGER.info(_progress)
 
     # End of an epoch
     et = (datetime.now() - start_time).total_seconds()
     LOGGER.info('total metrics:\t' + '\t'.join(['{:.3f}'.format(
-        sum(tm)/len(loader)) for tm in total_metrics]))
+        sum(tm)/(len(tm) + 1e-16)) for tm in total_metrics]))
 
-    return sum(total_metrics[1]) / len(loader)
+    return sum(total_metrics[1]) / len(total_metrics[1])
 
 
 def save_drug(model, dataset, args):
@@ -125,6 +125,7 @@ def save_drug(model, dataset, args):
         d1_l = len(d1_r)
 
         # For string data (smiles/inchikey)
+        # TODO: change as collate_fn
         if args.rep_idx == 0 or args.rep_idx == 1:
             d1_r = list(map(lambda x: dataset.char2idx[x], d1_r))
             d1_l = len(d1_r)
@@ -150,9 +151,10 @@ def save_drug(model, dataset, args):
             unk_cnt += 1
 
         # Print progress
-        _progress = '{}/{} saving drug embeddings'.format(
-            idx, len(dataset.drugs))
-        LOGGER.info(_progress)
+        if idx % args.print_step == 0 or idx == len(dataset.drugs) - 1:
+            _progress = '{}/{} saving drug embeddings..'.format(
+                idx, len(dataset.drugs))
+            LOGGER.info(_progress)
 
     # assert unk_cnt == len(dataset.unknown)
 

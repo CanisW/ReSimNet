@@ -24,7 +24,7 @@ LOGGER = logging.getLogger()
 
 DATA_PATH = './tasks/data/drug/drug(tmp).pkl'
 CKPT_DIR = './results/'
-MODEL_NAME = 'model.pth'
+MODEL_NAME = 'test.mdl'
 
 
 def str2bool(v):
@@ -154,7 +154,7 @@ def get_model(args, dataset):
 
 def init_logging(args):
     LOGGER.setLevel(logging.INFO)
-    fmt = logging.Formatter('%(asctime)s: [%(message)s]',
+    fmt = logging.Formatter('%(asctime)s: [ %(message)s ]',
                             '%m/%d/%Y %I:%M:%S %p')
     console = logging.StreamHandler()
     console.setFormatter(fmt)
@@ -181,7 +181,7 @@ def init_seed(seed=None):
 def main():
     # Initialize logging and prepare seed
     init_logging(args)
-    LOGGER.info(sys.argv)
+    LOGGER.info('COMMAND: {}'.format(' '.join(sys.argv)))
     LOGGER.info(args)
     init_seed(args.seed)
 
