@@ -24,7 +24,7 @@ def progress(a, b):
         _progress = 1
         status = ""
     block = int(round(bar_length * _progress))
-    text = "\r\t[{}]\t{}/{} {}".format(
+    text = "[{}]\t{}/{} {}".format(
             "#" * block + " " * (bar_length-block), int(a), b, status)
 
     return text

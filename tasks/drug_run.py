@@ -5,15 +5,18 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+import logging
 
 from datetime import datetime
 from torch.autograd import Variable
-
 from models.root.utils import *
 
 
+LOGGER = logging.getLogger(__name__)
+
+
 # Run a single epoch
-def run_drug(model, dataset, args, train=False):
+def run_drug(model, loader, dataset, args, train=False):
     total_step = 0.0
     total_metrics = [[],[],[],[],[]]
     tar_set = []
@@ -25,14 +28,10 @@ def run_drug(model, dataset, args, train=False):
     uu_tar_set = []
     uu_pred_set = []
     start_time = datetime.now()
-    dataset.shuffle()
 
-    for d1, d1_r, d1_l, d2, d2_r, d2_l, score in dataset.loader(
-                                                 args.batch_size, args.s_idx):
+    for d_idx, (d1, d1_r, d1_l, d2, d2_r, d2_l, score) in enumerate(loader):
 
         # Split for KK/KU/UU sets
-        d1_r, d1_l, d2_r, d2_l, score  = (np.array(xx) for xx 
-                                          in [d1_r, d1_l, d2_r, d2_l, score])
         kk_idx = np.argwhere([a in dataset.known and b in dataset.known
                               for a, b in zip(d1, d2)]).flatten()
         ku_idx = np.argwhere([(a in dataset.unknown) != (b in dataset.unknown)
@@ -41,73 +40,45 @@ def run_drug(model, dataset, args, train=False):
                               for a, b in zip(d1, d2)]).flatten()
         assert len(kk_idx) + len(ku_idx) + len(uu_idx) == len(d1)
 
-        # Wrap as Tensor/Variable
-        if dataset._rep_idx != 3: # real valued for mol2vec
-            d1_r = Variable(torch.LongTensor(d1_r)).cuda()
-            d2_r = Variable(torch.LongTensor(d2_r)).cuda()
-        else:
-            d1_r = Variable(torch.FloatTensor(d1_r)).cuda()
-            d2_r = Variable(torch.FloatTensor(d2_r)).cuda()
-        d1_l = torch.LongTensor(d1_l)
-        d2_l = torch.LongTensor(d2_l)
-        score = [float(s > 0) for s in score]
-        score = Variable(torch.FloatTensor(score)).cuda()
-
         # Grad zero + mode change
         model.optimizer.zero_grad()
         if train: model.train(train)
         else: model.eval()
 
         # Get outputs
-        outputs, embed1, embed2 = model(d1_r, d1_l, d2_r, d2_l)
-        loss = model.get_loss(outputs, score)
+        outputs, embed1, embed2 = model(d1_r.cuda(), d1_l, d2_r.cuda(), d2_l)
+        loss = model.get_loss(outputs, score.cuda())
         total_metrics[0] += [loss.data[0]]
         total_step += 1.0
-        d_idx = (total_step - 1) * args.batch_size + len(d1)
 
-        # Calculate corref
+        # Calculate acc 
         tmp_tar = score.data.cpu().numpy()
         tmp_pred = outputs.data.cpu().numpy()
         # print(tmp_tar[:10], tmp_pred[:10])
 
-        # Metrics are different for regression and binary
-        if not args.binary:
-            tar_set += list(tmp_tar[:])
-            pred_set += list(tmp_pred[:])
-            kk_tar_set += list(tmp_tar[kk_idx])
-            kk_pred_set += list(tmp_pred[kk_idx])
-            ku_tar_set += list(tmp_tar[ku_idx])
-            ku_pred_set += list(tmp_pred[ku_idx])
-            uu_tar_set += list(tmp_tar[uu_idx])
-            uu_pred_set += list(tmp_pred[uu_idx])
+        # Metrics for binary classification
+        tmp_pred = np.array([float(p > 0.5) for p in tmp_pred[:]])
+        tar_set = tmp_tar[:]
+        pred_set = tmp_pred[:]
+        kk_tar_set = tmp_tar[kk_idx]
+        kk_pred_set = tmp_pred[kk_idx]
+        ku_tar_set = tmp_tar[ku_idx]
+        ku_pred_set = tmp_pred[ku_idx]
+        uu_tar_set = tmp_tar[uu_idx]
+        uu_pred_set = tmp_pred[uu_idx]
+    
+        acc = sum(tar_set==pred_set)/len(tar_set)
+        acc_kk = sum(kk_tar_set==kk_pred_set)/(len(kk_tar_set) + 1e-16)
+        acc_ku = sum(ku_tar_set==ku_pred_set)/(len(ku_tar_set) + 1e-16)
+        acc_uu = sum(uu_tar_set==uu_pred_set)/(len(uu_tar_set) + 1e-16)
 
-            corref = np.corrcoef(tar_set, pred_set)[0][1]
-            corref_kk = np.corrcoef(kk_tar_set, kk_pred_set)[0][1]
-            corref_ku = np.corrcoef(ku_tar_set, ku_pred_set)[0][1]
-            corref_uu = np.corrcoef(uu_tar_set, uu_pred_set)[0][1]
-        else:
-            tmp_pred = np.array([float(p > 0.5) for p in tmp_pred[:]])
-            tar_set = tmp_tar[:]
-            pred_set = tmp_pred[:]
-            kk_tar_set = tmp_tar[kk_idx]
-            kk_pred_set = tmp_pred[kk_idx]
-            ku_tar_set = tmp_tar[ku_idx]
-            ku_pred_set = tmp_pred[ku_idx]
-            uu_tar_set = tmp_tar[uu_idx]
-            uu_pred_set = tmp_pred[uu_idx]
-        
-            corref = sum(tar_set==pred_set)/len(tar_set)
-            corref_kk = sum(kk_tar_set==kk_pred_set)/(len(kk_tar_set) + 1e-16)
-            corref_ku = sum(ku_tar_set==ku_pred_set)/(len(ku_tar_set) + 1e-16)
-            corref_uu = sum(uu_tar_set==uu_pred_set)/(len(uu_tar_set) + 1e-16)
-
-        total_metrics[1] += [corref]
+        total_metrics[1] += [acc]
         if len(kk_idx) != 0:
-            total_metrics[2] += [corref_kk]
+            total_metrics[2] += [acc_kk]
         if len(ku_idx) != 0:
-            total_metrics[3] += [corref_ku]
+            total_metrics[3] += [acc_ku]
         if len(uu_idx) != 0:
-            total_metrics[4] += [corref_uu]
+            total_metrics[4] += [acc_uu]
 
         # Optimize model
         if train and not args.save_embed:
@@ -120,33 +91,27 @@ def run_drug(model, dataset, args, train=False):
             model.optimizer.step()
         
         # Print for print step or at last
-        if total_step % args.print_step == 0 or d_idx == dataset.length:
+        if d_idx % args.print_step == 0 or d_idx == (len(loader) - 1):
             et = int((datetime.now() - start_time).total_seconds())
-            _progress = progress(d_idx, dataset.length)
-            _progress += ('{} '.format(int(total_step)) + 'iter '
-                    + 'Loss/Total/KK/KU/UU '
-                    + str([float('{:.3f}'.format(sum(tm)/(len(tm) + 1e-16)))
-                        for tm in total_metrics])
-                    + ' time: {:2d}:{:2d}:{:2d}'.format(
-                        et//3600, et%3600//60, et%60))
-            sys.stdout.write(_progress)
-            sys.stdout.flush()
+            _progress = (
+                '{}/{} | Loss: {:.3f} | Total Loss: {:.3f} | '.format(
+                d_idx + 1, len(loader),
+                sum(total_metrics[0])/(d_idx + 1), 
+                sum(total_metrics[1])/(d_idx + 1)) +
+                'KK: {:.3f} KU: {:.3f} UU: {:.3f} | '.format(
+                sum(total_metrics[2])/(d_idx + 1), 
+                sum(total_metrics[3])/(d_idx + 1),
+                sum(total_metrics[4])/(d_idx + 1)) +
+                'Time: {:2d}:{:2d}:{:2d}'.format(
+                et//3600, et%3600//60, et%60))
+            LOGGER.info(_progress)
 
     # End of an epoch
     et = (datetime.now() - start_time).total_seconds()
-    print('\n\ttotal metrics:\t' + '\t'.join(['{:.3f}'.format(
-        sum(tm)/(len(tm) + 1e-16)) for tm in total_metrics]))
+    LOGGER.info('total metrics:\t' + '\t'.join(['{:.3f}'.format(
+        sum(tm)/len(loader)) for tm in total_metrics]))
 
-    if not args.binary:
-        print('\tpearson correlation: {:.3f}\t'.format(corref))
-        print('\tKK, KU, UU correlation: {:.3f}/{:.3f}/{:.3f}\t'.format(
-              corref_kk, corref_ku, corref_uu))
-
-
-    if not args.binary:
-        return corref
-    else:
-        return sum(total_metrics[1]) / len(total_metrics[1])
+    return sum(total_metrics[1]) / len(loader)
 
 
 def save_drug(model, dataset, args):
@@ -181,18 +146,17 @@ def save_drug(model, dataset, args):
         key2vec[drug] = [embed1.squeeze().data.tolist(), drug in dataset.known]
 
         if drug not in dataset.known:
-            assert drug in dataset.unknown
+            # assert drug in dataset.unknown
             unk_cnt += 1
 
         # Print progress
-        _progress = progress(idx, len(dataset.drugs))
-        _progress += 'saving drug embeddings..'
-        sys.stdout.write(_progress)
-        sys.stdout.flush()
+        _progress = '{}/{} saving drug embeddings'.format(
+            idx, len(dataset.drugs))
+        LOGGER.info(_progress)
 
-    assert unk_cnt == len(dataset.unknown)
+    # assert unk_cnt == len(dataset.unknown)
 
     # Save embed as pickle
-    pickle.dump(key2vec, open('{}embed_{}.pkl'.format(
+    pickle.dump(key2vec, open('{}embed_{}_toxic.pkl'.format(
                 args.checkpoint_dir, args.model_name), 'wb'), protocol=2)
-    print('\n\t{} number of unique drugs saved.'.format(len(key2vec)))
+    LOGGER.info('{} number of unique drugs saved.'.format(len(key2vec)))

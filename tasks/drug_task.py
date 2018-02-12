@@ -6,16 +6,23 @@ import string
 import os
 import random
 import csv
+import torch
+
 from os.path import expanduser
+from torch.autograd import Variable
+from torch.utils.data import Dataset
+from torch.utils.data.sampler import Sampler
 
 
 class DrugDataset(object):
     def __init__(self, drug_id_path, drug_sub_path, drug_pair_path):
+
         self.initial_setting()
         # Build drug dictionary for id + sub
         self.drugs = self.process_drug_id(drug_id_path)
         self.append_drug_sub(drug_sub_path, self.drugs)
 
+        # Save drug pair scores
         self.pairs = self.process_drug_pair(drug_pair_path)
         self.dataset = self.split_dataset(self.pairs)
 
@@ -94,20 +101,27 @@ class DrugDataset(object):
         for path in paths:
             print('### Drug subID appending {}'.format(path))
             drug2rep = pickle.load(open(path, 'rb'))
-            assert len(drug2rep) == len(drugs)
 
             # Append drug sub id
             for drug, rep in drug2rep.items():
-                drugs[drug].append(rep)
+                if drug not in drugs:
+                    drugs[drug] = [rep]
+                    
+                    # Update drug characters and max length for smiles
+                    if 'smiles' in path:
+                        list(map(lambda x: self.register_schar(x), rep))
+                        self.schar_maxlen = self.schar_maxlen \
+                                if self.schar_maxlen > len(rep) else len(rep)
+
+                else:
+                    drugs[drug].append(rep)
             self.sub_lens.append(len(rep))
 
         print('Drug rep size {}\n'.format(self.sub_lens))
 
     def process_drug_pair(self, path):
         print('### Dug pair processing {}'.format(path))
-        drug1_set = []
-        drug2_set = []
-        scores = []
+        pair_scores = []
 
         with open(path) as f:
             csv_reader = csv.reader(f)
@@ -115,7 +129,7 @@ class DrugDataset(object):
                 if row_idx == 0:
                     continue
                 
-                # Skip invalid rows, keys
+                # Save drugs, score (real-valued), target (binary)
                 drug1 = row[1]
                 drug2 = row[2]
                 score = float(row[3])
@@ -123,16 +137,12 @@ class DrugDataset(object):
                 assert drug1 in self.drugs and drug2 in self.drugs
 
                 # Save each drug and scores
-                drug1_set.append(drug1)
-                drug2_set.append(drug2)
-                scores.append([score, target])
+                pair_scores.append([drug1, drug2, [score, target]])
 
-        pairs = [drug1_set, drug2_set, scores]
-
-        print('Dataset size {}\n'.format(len(drug1_set)))
-        return pairs
+        print('Dataset size {}\n'.format(len(pair_scores)))
+        return pair_scores
     
-    def split_dataset(self, p, unk_test=True):
+    def split_dataset(self, pair_scores, unk_test=True):
         print('### Split dataset')
 
         # Shuffle drugs dicitonary and split
@@ -150,62 +160,46 @@ class DrugDataset(object):
             assert unk not in self.known
 
         # Shuffle dataset
-        zipped = list(zip(p[0], p[1], p[2]))
-        random.shuffle(zipped)
-        sf_p = list(zip(*zipped))
+        random.shuffle(pair_scores)
 
         # Ready for train/valid/test
-        train = [[], [], []]
-        valid = [[], [], []]
-        test = [[], [], []]
-        valid_kk = 0
-        valid_ku = 0
-        valid_uu = 0
-        test_kk = 0
-        test_ku = 0
-        test_uu = 0
+        train = []
+        valid = []
+        test = []
+        valid_kk = valid_ku = valid_uu = 0
+        test_kk = test_ku = test_uu = 0
 
         # If either one is unknown, add to test or valid
-        for drug1, drug2, scores in zip(sf_p[0], sf_p[1], sf_p[2]):
+        for drug1, drug2, scores in pair_scores:
             if drug1 in self.unknown or drug2 in self.unknown:
                 is_test = np.random.binomial(1, 
                                 self.SR[2]/(self.SR[1]+self.SR[2]))
 
                 if is_test:
-                    test[0].append(drug1)
-                    test[1].append(drug2)
-                    test[2].append(scores)
+                    test.append([drug1, drug2, scores])
                     if drug1 in self.unknown and drug2 in self.unknown:
                         test_uu += 1
                     else:
                         test_ku += 1
                 else:
-                    valid[0].append(drug1)
-                    valid[1].append(drug2)
-                    valid[2].append(scores)
+                    valid.append([drug1, drug2, scores])
                     if drug1 in self.unknown and drug2 in self.unknown:
                         valid_uu += 1
                     else:
                         valid_ku += 1
 
         # Fill known/known set with limit of split ratio
-        for drug1, drug2, scores in zip(sf_p[0], sf_p[1], sf_p[2]):
+        for drug1, drug2, scores in pair_scores:
             if drug1 not in self.unknown and drug2 not in self.unknown:
                 assert drug1 in self.known and drug2 in self.known
 
-                if len(train[0]) < len(sf_p[0]) * self.SR[0]:
-                    train[0].append(drug1)
-                    train[1].append(drug2)
-                    train[2].append(scores)
-                elif len(valid[0]) < len(sf_p[0]) * self.SR[1]: 
-                    valid[0].append(drug1)
-                    valid[1].append(drug2)
-                    valid[2].append(scores)
+                if len(train) < len(pair_scores) * self.SR[0]:
+                    train.append([drug1, drug2, scores])
+                elif len(valid) < len(pair_scores) * self.SR[1]: 
+                    valid.append([drug1, drug2, scores])
                     valid_kk += 1
                 else:
-                    test[0].append(drug1)
-                    test[1].append(drug2)
-                    test[2].append(scores)
+                    test.append([drug1, drug2, scores])
                     test_kk += 1
 
         print('Train/Valid/Test split: {}/{}/{}'.format(
@@ -214,82 +208,111 @@ class DrugDataset(object):
               valid_kk, valid_ku, valid_uu, test_kk, test_ku, test_uu))
 
         return {'tr': train, 'va': valid, 'te': test}
-    
-    def pad_drug(self, drug, maxlen, pad):
-        while len(drug) != maxlen:
-            drug.append(pad)
-        assert len(drug) == maxlen
-        return drug
 
-    def loader(self, batch_size=16, s_idx=1):
-        b_drug1 = []
-        b_drug1_rep = []
-        b_drug1_len = []
-        b_drug2 = []
-        b_drug2_rep = []
-        b_drug2_len = []
-        b_score = []
-        d = self.dataset[self._mode]
-        rep_idx = self._rep_idx
+    def get_dataloader(self, batch_size=32, shuffle=True, num_workers=5):
+        train_dataset = Representation(self.dataset['tr'], self.drugs, 
+                                       self._rep_idx, s_idx=1)
+        train_sampler = SortedBatchSampler(train_dataset.lengths(),
+                                           batch_size,
+                                           shuffle=True)
+        train_loader = torch.utils.data.DataLoader(
+            train_dataset,
+            batch_size=batch_size,
+            sampler=train_sampler,
+            num_workers=num_workers,
+            collate_fn=self.collate_fn,
+            pin_memory=True,
+        )
 
-        for drug1, drug2, scores in zip(d[0], d[1], d[2]):
-            drug1_rep = self.drugs[drug1][rep_idx]
-            drug2_rep = self.drugs[drug2][rep_idx]
-            drug1_len = 0
-            drug2_len = 0
+        valid_dataset = Representation(self.dataset['va'], self.drugs, 
+                                       self._rep_idx, s_idx=1)
+        valid_sampler = SortedBatchSampler(valid_dataset.lengths(),
+                                           batch_size,
+                                           shuffle=False)
+        valid_loader = torch.utils.data.DataLoader(
+            valid_dataset,
+            batch_size=batch_size,
+            sampler=valid_sampler,
+            num_workers=num_workers,
+            collate_fn=self.collate_fn,
+            pin_memory=True,
+        )
 
-            # Smiles / Inchikey
-            if rep_idx == 0 or rep_idx == 1:
-                drug1_rep = list(map(lambda x: self.char2idx[x], drug1_rep))
-                drug1_len = len(drug1_rep)
-                drug1_rep = self.pad_drug(drug1_rep, self.char_maxlen, 
-                                          self.char2idx[self.PAD])
-                drug2_rep = list(map(lambda x: self.char2idx[x], drug2_rep))
-                drug2_len = len(drug2_rep)
-                drug2_rep = self.pad_drug(drug2_rep, self.char_maxlen, 
-                                          self.char2idx[self.PAD])
+        test_dataset = Representation(self.dataset['te'], self.drugs,
+                                       self._rep_idx, s_idx=1)
+        test_sampler = SortedBatchSampler(test_dataset.lengths(),
+                                           batch_size,
+                                           shuffle=False)
+        test_loader = torch.utils.data.DataLoader(
+            test_dataset,
+            batch_size=batch_size,
+            sampler=test_sampler,
+            num_workers=num_workers,
+            collate_fn=self.collate_fn,
+            pin_memory=True,
+        )
 
-            # Fingerprint/Mol2vec (2, 3)
-            b_drug1.append(drug1)
-            b_drug1_rep.append(drug1_rep)
-            b_drug1_len.append(drug1_len)
-            b_drug2.append(drug2)
-            b_drug2_rep.append(drug2_rep)
-            b_drug2_len.append(drug2_len)
-            b_score.append(scores[s_idx])
+        return train_loader, valid_loader, test_loader
 
-            if len(b_drug1) == batch_size:
-                yield (b_drug1, b_drug1_rep, b_drug1_len, 
-                       b_drug2, b_drug2_rep, b_drug2_len, b_score)
-                del (b_drug1[:], b_drug1_rep[:], b_drug1_len[:],
-                     b_drug2[:], b_drug2_rep[:], b_drug2_len[:], b_score[:])
+    def collate_fn(self, batch):
+        drug1_raws = [ex[0] for ex in batch]
+        drug1_lens = torch.LongTensor([ex[2] for ex in batch])
+        drug2_raws = [ex[3] for ex in batch]
+        drug2_lens = torch.LongTensor([ex[5] for ex in batch])
 
-        yield (b_drug1, b_drug1_rep, b_drug1_len, 
-               b_drug2, b_drug2_rep, b_drug2_len, b_score)
+        drug1_maxlen = max([len(ex[1]) for ex in batch])
+        drug1_reps = torch.FloatTensor(len(batch), drug1_maxlen).zero_()
+        drug2_maxlen = max([len(ex[4]) for ex in batch])
+        drug2_reps = torch.FloatTensor(len(batch), drug2_maxlen).zero_()
+        scores = torch.FloatTensor(len(batch)).zero_()
 
-    def shuffle(self):
-        d = self.dataset[self._mode]
-        zipped = list(zip(d[0], d[1], d[2]))
-        random.shuffle(zipped)
-        d[0], d[1], d[2] = zip(*zipped)
+        for idx, ex in enumerate(batch):
+            drug1_rep = ex[1]
+            if self._rep_idx < 2:
+                drug1_rep = list(map(lambda x: self.char2idx[x], ex[1]))
+            drug1_rep = torch.FloatTensor(drug1_rep)
+            drug1_reps[idx, :drug1_rep.size(0)].copy_(drug1_rep)
+
+            drug2_rep = ex[4]
+            if self._rep_idx < 2:
+                drug2_rep = list(map(lambda x: self.char2idx[x], ex[4]))
+            drug2_rep = torch.FloatTensor(drug2_rep)
+            drug2_reps[idx, :drug2_rep.size(0)].copy_(drug2_rep)
+
+            scores[idx] = float(ex[6] > 0)
+
+        # Set to LongTensor if not mol2vec
+        if self._rep_idx != 3:
+            drug1_reps = drug1_reps.long()
+            drug2_reps = drug2_reps.long()
+
+        # Set as Variables
+        drug1_reps = Variable(drug1_reps)
+        drug2_reps = Variable(drug2_reps)
+        scores = Variable(scores)
+         
+        return (drug1_raws, drug1_reps, drug1_lens, 
+                drug2_raws, drug2_reps, drug2_lens, scores)
+
 
     def decode_data(self, d1, d1_l, d2, d2_l, score):
-        print('Drug1: {}, length: {}'.format(''.join(list(map(
-            lambda x: self.idx2char[x], d1[:d1_l]))), d1_l))
-        print('Drug2: {}, length: {}'.format(''.join(list(map(
-            lambda x: self.idx2char[x], d2[:d2_l]))), d2_l))
-        print('Drug1: {}'.format(d1))
-        print('Drug2: {}'.format(d2))
-        print('Score: {}\n'.format(score))
+        d1 = d1.data.tolist()
+        d2 = d2.data.tolist()
+        if self._rep_idx >= 2:
+            print('Drug1: {}, length: {}'.format(d1, d1_l))
+            print('Drug2: {}, length: {}'.format(d2, d2_l))
+        else:
+            print('Drug1: {}, length: {}'.format(''.join(list(map(
+                lambda x: self.idx2char[x], d1[:d1_l]))), d1_l))
+            print('Drug2: {}, length: {}'.format(''.join(list(map(
+                lambda x: self.idx2char[x], d2[:d2_l]))), d2_l))
+        # print('Drug1: {}'.format(d1))
+        # print('Drug2: {}'.format(d2))
+        print('Score: {}\n'.format(score.data[0]))
 
-    # Dataset mode ['tr', 'va'], rep_idx [0, 1, 2, 3]
-    def set_mode(self, mode, rep_idx):
-        self._mode = mode
+    # rep_idx [0, 1, 2, 3]
+    def set_rep(self, rep_idx):
         self._rep_idx = rep_idx
-
-    @property
-    def length(self):
-        return len(self.dataset[self._mode][0])
     
     @property
     def char2idx(self):
@@ -331,6 +354,61 @@ class DrugDataset(object):
         else:
             assert False, 'Wrong rep_idx {}'.format(rep_idx)
 
+
+class Representation(Dataset):
+    def __init__(self, examples, drugs, rep_idx, s_idx):
+        self.examples = examples
+        self.drugs = drugs
+        self.rep_idx = rep_idx
+        self.s_idx = s_idx
+
+    def __len__(self):
+        return len(self.examples)
+
+    def __getitem__(self, index):
+        example = self.examples[index]
+        drug1, drug2, scores = example
+
+        # Choose drug representation
+        drug1_rep = self.drugs[drug1][self.rep_idx]
+        drug1_len = len(drug1_rep)
+        drug2_rep = self.drugs[drug2][self.rep_idx]
+        drug2_len = len(drug2_rep)
+
+        # s_idx == 1 means binary classification
+        score = scores[self.s_idx]
+        return drug1, drug1_rep, drug1_len, drug2, drug2_rep, drug2_len, score
+    
+    def lengths(self):
+        def get_longer_length(ex):
+            drug1_len = len(self.drugs[ex[0]][self.rep_idx])
+            drug2_len = len(self.drugs[ex[1]][self.rep_idx])
+            length = drug1_len if drug1_len > drug2_len else drug2_len
+            return length
+        return [get_longer_length(ex) for ex in self.examples]
+
+
+class SortedBatchSampler(Sampler):
+    def __init__(self, lengths, batch_size, shuffle=True):
+        self.lengths = lengths
+        self.batch_size = batch_size
+        self.shuffle = shuffle
+
+    def __iter__(self):
+        lengths = np.array(
+            [(l, np.random.random()) for l in self.lengths],
+            dtype=[('l', np.int_), ('rand', np.float_)]
+        )
+        indices = np.argsort(lengths, order=('l', 'rand'))
+        batches = [indices[i:i + self.batch_size]
+                   for i in range(0, len(indices), self.batch_size)]
+        if self.shuffle:
+            np.random.shuffle(batches)
+        return iter([i for batch in batches for i in batch])
+    
+    def __len__(self):
+        return len(self.lengths)
+
 """
 [Version Note]
     v0.1: basic implementation
@@ -364,8 +442,12 @@ if __name__ == '__main__':
     drug_id_path = './data/drug/drug_info_1.0.csv'
     drug_sub_path = ['./data/drug/drug_fingerprint_1.0_p3.pkl',
                      './data/drug/drug_mol2vec_1.0_p3.pkl']
+    # drug_sub_path = ['./data/drug/tox21_smiles.pkl',
+    #                  './data/drug/tox21_smiles.pkl',
+    #                  './data/drug/tox21_fingerprint.pkl',
+    #                  './data/drug/tox21_mol2vec.pkl']
     drug_pair_path = './data/drug/drug_cscore_pair_top1%bottom1%.csv'
-    save_preprocess = False
+    save_preprocess = True
     save_path = './data/drug/drug(tmp).pkl'
     load_path = './data/drug/drug(v0.3).pkl'
 
@@ -379,13 +461,10 @@ if __name__ == '__main__':
         dataset = pickle.load(open(load_path, 'rb'))
    
     # Loader testing
-    dataset.set_mode('te', rep_idx=1)
-    # dataset.shuffle_data()
+    dataset.set_rep(rep_idx=0)
 
     for idx, (d1, d1_r, d1_l, d2, d2_r, d2_l, score) in enumerate(
-                                            dataset.loader(batch_size=1600)):
-        d1, d2, score  = (np.array(xx) for xx in [d1, d2, score])
-        print(idx)
+            dataset.get_dataloader(batch_size=1600)[1]):
         dataset.decode_data(d1_r[0], d1_l[0], d2_r[0], d2_l[0], score[0])
         pass
 

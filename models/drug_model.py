@@ -6,9 +6,13 @@ import numpy as np
 import collections
 import math
 import sys
+import logging
 
 from torch.autograd import Variable
 from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 class DrugModel(nn.Module):
@@ -34,15 +38,15 @@ class DrugModel(nn.Module):
         # For rep_ix 2, 3
         else:
             self.fc1 = nn.Sequential(
-                            nn.Linear(input_dim, hidden_dim),
-                            nn.Sigmoid(),
-                            nn.Linear(hidden_dim, drug_embed_dim)
-                       )
+		nn.Linear(input_dim, hidden_dim),
+		nn.Sigmoid(),
+		nn.Linear(hidden_dim, drug_embed_dim)
+            )
 
         self.dist_fc = nn.Sequential(
-                            nn.Dropout(linear_dropout),
-                            nn.Linear(drug_embed_dim, 1)
-                       )
+            nn.Dropout(linear_dropout),
+            nn.Linear(drug_embed_dim, 1)
+        )
 
         # Get params and register optimizer
         info, params = self.get_model_params()
@@ -51,13 +55,13 @@ class DrugModel(nn.Module):
             self.criterion = nn.BCELoss()
         else:
             self.criterion = nn.MSELoss()
-        print(info)
+        LOGGER.info(info)
 
     def init_lstm_h(self, batch_size):
         return (Variable(torch.zeros(
-            self.lstm_layer*1, batch_size, self.drug_embed_dim)).cuda(),
+            	self.lstm_layer*1, batch_size, self.drug_embed_dim)).cuda(),
                 Variable(torch.zeros(
-            self.lstm_layer*1, batch_size, self.drug_embed_dim)).cuda())
+            	self.lstm_layer*1, batch_size, self.drug_embed_dim)).cuda())
 
     # Set Siamese network as basic LSTM
     def siamese_sequence(self, inputs, length):
@@ -98,8 +102,8 @@ class DrugModel(nn.Module):
     def siamese_basic(self, inputs):
         return self.fc1(inputs.float())
     
-    # Calculate similarity score of vec1 and vec2
     def distance_layer(self, vec1, vec2, distance='l1'):
+	# Use Sigmoid for binary classification, otherwise tanh for regression
         if self.binary:
             nonl = F.sigmoid
         else:
@@ -135,6 +139,7 @@ class DrugModel(nn.Module):
     def get_model_params(self):
         params = []
         total_size = 0
+
         def multiply_iter(p_list):
             out = 1
             for p in p_list:
@@ -145,17 +150,17 @@ class DrugModel(nn.Module):
             if p.requires_grad:
                 params.append(p)
                 total_size += multiply_iter(p.size())
-                # print(p.size())
+
         return '{}\nparam size: {:,}\n'.format(self, total_size), params
 
     def save_checkpoint(self, state, checkpoint_dir, filename):
         filename = checkpoint_dir + filename
-        print('\t=> save checkpoint %s' % filename)
+        LOGGER.info('Save checkpoint %s' % filename)
         torch.save(state, filename)
 
     def load_checkpoint(self, checkpoint_dir, filename):
         filename = checkpoint_dir + filename
-        print('\t=> load checkpoint %s' % filename)
+        LOGGER.info('Load checkpoint %s' % filename)
         checkpoint = torch.load(filename)
 
         self.load_state_dict(checkpoint['state_dict'])
