@@ -203,7 +203,7 @@ class DrugDataset(object):
                     test_kk += 1
 
         print('Train/Valid/Test split: {}/{}/{}'.format(
-              len(train[0]), len(valid[0]), len(test[0])))
+              len(train), len(valid), len(test)))
         print('Valid/Test KK,KU,UU: ({},{},{})/({},{},{})\n'.format(
               valid_kk, valid_ku, valid_uu, test_kk, test_ku, test_uu))
 
@@ -440,16 +440,16 @@ if __name__ == '__main__':
 
     # Dataset configuration 
     drug_id_path = './data/drug/drug_info_1.0.csv'
-    drug_sub_path = ['./data/drug/drug_fingerprint_1.0_p3.pkl',
-                     './data/drug/drug_mol2vec_1.0_p3.pkl']
+    drug_sub_path = ['./data/drug/drug_fingerprint_2.0_p2.pkl',
+                     './data/drug/drug_mol2vec_2.0_p2.pkl']
     # drug_sub_path = ['./data/drug/tox21_smiles.pkl',
     #                  './data/drug/tox21_smiles.pkl',
     #                  './data/drug/tox21_fingerprint.pkl',
     #                  './data/drug/tox21_mol2vec.pkl']
-    drug_pair_path = './data/drug/drug_cscore_pair_top1%bottom1%.csv'
-    save_preprocess = True
+    drug_pair_path = './data/drug/drug_cscore_pair_0.2.csv'
+    save_preprocess = False
     save_path = './data/drug/drug(tmp).pkl'
-    load_path = './data/drug/drug(v0.3).pkl'
+    load_path = './data/drug/drug(v0.2).pkl'
 
     # Save or load dataset
     if save_preprocess:

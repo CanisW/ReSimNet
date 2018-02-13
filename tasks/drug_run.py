@@ -125,12 +125,9 @@ def save_drug(model, dataset, args):
         d1_l = len(d1_r)
 
         # For string data (smiles/inchikey)
-        # TODO: change as collate_fn
         if args.rep_idx == 0 or args.rep_idx == 1:
             d1_r = list(map(lambda x: dataset.char2idx[x], d1_r))
             d1_l = len(d1_r)
-            d1_r = dataset.pad_drug(d1_r, dataset.char_maxlen, 
-                                          dataset.char2idx[dataset.PAD])
 
         # Real valued for mol2vec
         if dataset._rep_idx != 3:

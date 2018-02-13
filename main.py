@@ -22,7 +22,7 @@ from models.root.utils import *
 
 LOGGER = logging.getLogger()
 
-DATA_PATH = './tasks/data/drug/drug(tmp).pkl'
+DATA_PATH = './tasks/data/drug/drug(v0.1).pkl'
 CKPT_DIR = './results/'
 MODEL_NAME = 'test.mdl'
 
@@ -72,11 +72,11 @@ argparser.add_argument('--drug-embed-dim', type=int, default=300)
 argparser.add_argument('--lstm-layer', type=int, default=1)
 argparser.add_argument('--lstm-dr', type=int, default=0.0)
 argparser.add_argument('--linear-dr', type=int, default=0.0)
-argparser.add_argument('--char-embed-dim', type=int, default=15)
+argparser.add_argument('--char-embed-dim', type=int, default=20)
 argparser.add_argument('--s-idx', type=int, default=1)
 argparser.add_argument('--rep-idx', type=int, default=0)
-argparser.add_argument('--dist-fn', type=str, default='cos')
-argparser.add_argument('--seed', type=int, default=1000)
+argparser.add_argument('--dist-fn', type=str, default='l2')
+argparser.add_argument('--seed', type=int, default=3)
 
 args = argparser.parse_args()
 
