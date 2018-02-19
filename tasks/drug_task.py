@@ -67,9 +67,9 @@ class DrugDataset(object):
         INCHIKEY_IDX = 4
         drugs = {}
         self.register_ichar(self.PAD)
-        # self.register_ichar(self.UNK)
+        self.register_ichar(self.UNK)
         self.register_schar(self.PAD)
-        # self.register_schar(self.UNK)
+        self.register_schar(self.UNK)
 
         with open(path) as f:
             csv_reader = csv.reader(f)
@@ -125,22 +125,26 @@ class DrugDataset(object):
     def process_drug_pair(self, path):
         print('### Dug pair processing {}'.format(path))
         pair_scores = []
+        REG_IDX = 5
+        BI_IDX = -1
 
         with open(path) as f:
             csv_reader = csv.reader(f)
             for row_idx, row in enumerate(csv_reader):
                 if row_idx == 0:
+                    print(row)
+                    print(row[REG_IDX], row[BI_IDX])
                     continue
                 
                 # Save drugs, score (real-valued), target (binary)
                 drug1 = row[1]
                 drug2 = row[2]
-                score = float(row[3])
-                target = float(row[4])
+                reg_score = float(row[REG_IDX])
+                bi_score = float(row[BI_IDX])
                 assert drug1 in self.drugs and drug2 in self.drugs
 
                 # Save each drug and scores
-                pair_scores.append([drug1, drug2, [score, target]])
+                pair_scores.append([drug1, drug2, [reg_score, bi_score]])
 
         print('Dataset size {}\n'.format(len(pair_scores)))
         return pair_scores
@@ -212,9 +216,9 @@ class DrugDataset(object):
 
         return {'tr': train, 'va': valid, 'te': test}
 
-    def get_dataloader(self, batch_size=32, shuffle=True, num_workers=5):
+    def get_dataloader(self, batch_size=32, shuffle=True, num_workers=5, s_idx=1):
         train_dataset = Representation(self.dataset['tr'], self.drugs, 
-                                       self._rep_idx, s_idx=1)
+                                       self._rep_idx, s_idx=s_idx)
         train_sampler = SortedBatchSampler(train_dataset.lengths(),
                                            batch_size,
                                            shuffle=True)
@@ -228,7 +232,7 @@ class DrugDataset(object):
         )
 
         valid_dataset = Representation(self.dataset['va'], self.drugs, 
-                                       self._rep_idx, s_idx=1)
+                                       self._rep_idx, s_idx=s_idx)
         valid_sampler = SortedBatchSampler(valid_dataset.lengths(),
                                            batch_size,
                                            shuffle=False)
@@ -242,7 +246,7 @@ class DrugDataset(object):
         )
 
         test_dataset = Representation(self.dataset['te'], self.drugs,
-                                       self._rep_idx, s_idx=1)
+                                       self._rep_idx, s_idx=s_idx)
         test_sampler = SortedBatchSampler(test_dataset.lengths(),
                                            batch_size,
                                            shuffle=False)
@@ -282,7 +286,7 @@ class DrugDataset(object):
             drug2_rep = torch.FloatTensor(drug2_rep)
             drug2_reps[idx, :drug2_rep.size(0)].copy_(drug2_rep)
 
-            scores[idx] = float(ex[6] > 0)
+            scores[idx] = ex[6]
 
         # Set to LongTensor if not mol2vec
         if self._rep_idx != 3:
@@ -380,6 +384,8 @@ class Representation(Dataset):
 
         # s_idx == 1 means binary classification
         score = scores[self.s_idx]
+        if self.s_idx == 1:
+            score = float(score > 0)
         return drug1, drug1_rep, drug1_len, drug2, drug2_rep, drug2_len, score
     
     def lengths(self):
@@ -452,7 +458,7 @@ if __name__ == '__main__':
     drug_pair_path = './data/drug/drug_cscore_pair_0.2.csv'
     save_preprocess = False
     save_path = './data/drug/drug(tmp).pkl'
-    load_path = './data/drug/drug(v0.2).pkl'
+    load_path = './data/drug/drug(tmp).pkl'
 
     # Save or load dataset
     if save_preprocess:
@@ -467,7 +473,7 @@ if __name__ == '__main__':
     dataset.set_rep(rep_idx=0)
 
     for idx, (d1, d1_r, d1_l, d2, d2_r, d2_l, score) in enumerate(
-            dataset.get_dataloader(batch_size=1600)[1]):
+            dataset.get_dataloader(batch_size=1600, s_idx=1)[1]):
         dataset.decode_data(d1_r[0], d1_l[0], d2_r[0], d2_l[0], score[0])
         pass
 

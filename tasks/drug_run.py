@@ -21,7 +21,6 @@ def run_binary(model, loader, dataset, args, train=False):
     metrics = {'loss':[]}
     tar_set = []
     pred_set = []
-    pred_scores = [] # For saving sigmoid scores
     kk_tar_set = []
     kk_pred_set = []
     ku_tar_set = []
@@ -55,7 +54,6 @@ def run_binary(model, loader, dataset, args, train=False):
         # Metrics for binary classification
         tmp_tar = score.data.cpu().numpy()
         tmp_pred = outputs.data.cpu().numpy()
-        pred_scores += list(tmp_pred)
         tmp_pred = np.array([float(p > 0.5) for p in tmp_pred[:]])
 
         # Accumulate for final evaluation
@@ -102,6 +100,8 @@ def run_binary(model, loader, dataset, args, train=False):
     f1_ku = f1_score(ku_tar_set, ku_pred_set, average='binary')
     f1_uu = f1_score(uu_tar_set, uu_pred_set, average='binary')
 
+    # TODO add spearman correlation
+
     # End of an epoch
     et = (datetime.now() - start_time).total_seconds()
     LOGGER.info('Total Loss: {:.3f} | F1: {:.3f} | '.format(
@@ -109,110 +109,15 @@ def run_binary(model, loader, dataset, args, train=False):
         'KK: {:.3f} KU: {:.3f} UU: {:.3f}'.format(
         f1_kk, f1_ku, f1_uu))
 
-    # Save label and prediction
-
     return f1_ku
 
 
 # TODO: change to regression (add correlation)
 def run_regression(model, loader, dataset, args, train=False):
-    total_step = 0.0
-    total_metrics = [[],[],[],[],[]]
-    tar_set = []
-    pred_set = []
-    kk_tar_set = []
-    kk_pred_set = []
-    ku_tar_set = []
-    ku_pred_set = []
-    uu_tar_set = []
-    uu_pred_set = []
-    start_time = datetime.now()
-
-    for d_idx, (d1, d1_r, d1_l, d2, d2_r, d2_l, score) in enumerate(loader):
-
-        # Split for KK/KU/UU sets
-        kk_idx = np.argwhere([a in dataset.known and b in dataset.known
-                              for a, b in zip(d1, d2)]).flatten()
-        ku_idx = np.argwhere([(a in dataset.unknown) != (b in dataset.unknown)
-                              for a, b in zip(d1, d2)]).flatten()
-        uu_idx = np.argwhere([a in dataset.unknown and b in dataset.unknown
-                              for a, b in zip(d1, d2)]).flatten()
-        assert len(kk_idx) + len(ku_idx) + len(uu_idx) == len(d1)
-
-        # Grad zero + mode change
-        model.optimizer.zero_grad()
-        if train: model.train(train)
-        else: model.eval()
-
-        # Get outputs
-        outputs, embed1, embed2 = model(d1_r.cuda(), d1_l, d2_r.cuda(), d2_l)
-        loss = model.get_loss(outputs, score.cuda())
-        total_metrics[0] += [loss.data[0]]
-        total_step += 1.0
-
-        # Calculate acc 
-        tmp_tar = score.data.cpu().numpy()
-        tmp_pred = outputs.data.cpu().numpy()
-        # print(tmp_tar[:10], tmp_pred[:10])
-
-        # Metrics for binary classification
-        tmp_pred = np.array([float(p > 0.5) for p in tmp_pred[:]])
-        tar_set = tmp_tar[:]
-        pred_set = tmp_pred[:]
-        kk_tar_set = tmp_tar[kk_idx]
-        kk_pred_set = tmp_pred[kk_idx]
-        ku_tar_set = tmp_tar[ku_idx]
-        ku_pred_set = tmp_pred[ku_idx]
-        uu_tar_set = tmp_tar[uu_idx]
-        uu_pred_set = tmp_pred[uu_idx]
-    
-        acc = sum(tar_set==pred_set)/len(tar_set)
-        acc_kk = sum(kk_tar_set==kk_pred_set)/(len(kk_tar_set) + 1e-16)
-        acc_ku = sum(ku_tar_set==ku_pred_set)/(len(ku_tar_set) + 1e-16)
-        acc_uu = sum(uu_tar_set==uu_pred_set)/(len(uu_tar_set) + 1e-16)
-
-        total_metrics[1] += [acc]
-        if len(kk_idx) != 0:
-            total_metrics[2] += [acc_kk]
-        if len(ku_idx) != 0:
-            total_metrics[3] += [acc_ku]
-        if len(uu_idx) != 0:
-            total_metrics[4] += [acc_uu]
-
-        # Optimize model
-        if train and not args.save_embed:
-            loss.backward()
-            nn.utils.clip_grad_norm(model.get_model_params()[1], 
-                    args.grad_max_norm)
-            # for p in model.get_model_params()[1]:
-            #     if p.grad is not None:
-            #         p.grad.data.clamp_(-args.grad_clip, args.grad_clip)
-            model.optimizer.step()
-        
-        # Print for print step or at last
-        if d_idx % args.print_step == 0 or d_idx == (len(loader) - 1):
-            et = int((datetime.now() - start_time).total_seconds())
-            _progress = (
-                '{}/{} | Loss: {:.3f} | Total Acc: {:.3f} | '.format(
-                d_idx + 1, len(loader),
-                sum(total_metrics[0])/len(total_metrics[0]), 
-                sum(total_metrics[1])/(len(total_metrics[1]) + 1e-16)) +
-                'KK: {:.3f} KU: {:.3f} UU: {:.3f} | '.format(
-                sum(total_metrics[2])/(len(total_metrics[2]) + 1e-16), 
-                sum(total_metrics[3])/(len(total_metrics[3]) + 1e-16),
-                sum(total_metrics[4])/(len(total_metrics[4]) + 1e-16)) +
-                '{:2d}:{:2d}:{:2d}'.format(
-                et//3600, et%3600//60, et%60))
-            LOGGER.info(_progress)
-
-    # End of an epoch
-    et = (datetime.now() - start_time).total_seconds()
-    LOGGER.info('total metrics:\t' + '\t'.join(['{:.3f}'.format(
-        sum(tm)/(len(tm) + 1e-16)) for tm in total_metrics]))
-
-    return sum(total_metrics[3]) / (len(total_metrics[3]) + 1e-16)
+    return None
 
 
+# Outputs response embeddings for a given dictionary
 def save_drug(model, dictionary, dataset, args):
     model.eval()
     key2vec = {}
@@ -244,6 +149,7 @@ def save_drug(model, dictionary, dataset, args):
 
         if drug not in dataset.known:
             # assert drug in dataset.unknown
+            # TODO UNK check from smiles
             unk_cnt += 1
 
         # Print progress
@@ -256,3 +162,27 @@ def save_drug(model, dictionary, dataset, args):
     pickle.dump(key2vec, open('{}embed_{}.pkl'.format(
                 args.checkpoint_dir, args.model_name), 'wb'), protocol=2)
     LOGGER.info('{}/{} number of unknown drugs.'.format(unk_cnt, len(key2vec)))
+
+
+# Outputs pred vs label scores given a dataloader
+def save_prediction(model, loader, dataset, args):
+    model.eval()
+
+    for d_idx, (d1, d1_r, d1_l, d2, d2_r, d2_l, score) in enumerate(loader):
+
+        # Split for KK/KU/UU sets
+        kk_idx = np.argwhere([a in dataset.known and b in dataset.known
+                              for a, b in zip(d1, d2)]).flatten()
+        ku_idx = np.argwhere([(a in dataset.unknown) != (b in dataset.unknown)
+                              for a, b in zip(d1, d2)]).flatten()
+        uu_idx = np.argwhere([a in dataset.unknown and b in dataset.unknown
+                              for a, b in zip(d1, d2)]).flatten()
+        assert len(kk_idx) + len(ku_idx) + len(uu_idx) == len(d1)
+
+        outputs, embed1, embed2 = model(d1_r.cuda(), d1_l, d2_r.cuda(), d2_l)
+        predictions = outputs.data.cpu().numpy()
+        targets = score
+
+        print(predictions)
+        print(targets)
+        sys.exit()

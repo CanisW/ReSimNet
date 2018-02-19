@@ -14,7 +14,7 @@ from datetime import datetime
 from torch.autograd import Variable
 
 from tasks.drug_task import DrugDataset
-from tasks.drug_run import run_binary, run_regression, save_drug
+from tasks.drug_run import *
 from models.drug_model import DrugModel
 
 from models.root.utils import *
@@ -59,6 +59,8 @@ argparser.add_argument('--debug', type='bool', default=False,
                        help='Run as debug mode')
 argparser.add_argument('--save-embed', type='bool', default=False,
                        help='Save embeddings with loaded model')
+argparser.add_argument('--save-prediction', type='bool', default=False,
+                       help='Save predictions with loaded model')
 
 # Train config
 argparser.add_argument('--batch-size', type=int, default=32)
@@ -90,6 +92,10 @@ if not os.path.exists(args.checkpoint_dir):
 
 
 def run_experiment(model, dataset, run_fn, args):
+
+    # Get dataloaders
+    train_loader, valid_loader, test_loader = dataset.get_dataloader(
+        batch_size=args.batch_size, s_idx=args.s_idx) 
     
     # Save embeddings and exit
     if args.save_embed:
@@ -97,10 +103,12 @@ def run_experiment(model, dataset, run_fn, args):
         drugs = pickle.load(open(args.drug_path, 'rb'))
         save_drug(model, drugs, dataset, args) 
         sys.exit()
-
-    # Get datasets
-    train_loader, valid_loader, test_loader = dataset.get_dataloader(
-        batch_size=args.batch_size) 
+    
+    # Save predictions on test dataset and exit
+    if args.save_prediction:
+        model.load_checkpoint(args.checkpoint_dir, args.model_name)
+        save_prediction(model, test_loader, dataset, args)
+        sys.exit()
 
     # Save and load model during experiments
     if args.train:
@@ -169,7 +177,6 @@ def init_logging(args):
     LOGGER.addHandler(console)
 
     # For logfile writing
-    print(args.checkpoint_dir + args.model_name)
     logfile = logging.FileHandler(
         args.checkpoint_dir + args.model_name + '.txt', 'w')
     logfile.setFormatter(fmt)
