@@ -14,7 +14,7 @@ from datetime import datetime
 from torch.autograd import Variable
 
 from tasks.drug_task import DrugDataset
-from tasks.drug_run import run_drug, save_drug
+from tasks.drug_run import run_binary, run_regression, save_drug
 from models.drug_model import DrugModel
 
 from models.root.utils import *
@@ -23,6 +23,7 @@ from models.root.utils import *
 LOGGER = logging.getLogger()
 
 DATA_PATH = './tasks/data/drug/drug(v0.1).pkl'
+DRUG_PATH = './tasks/data/drug/tox21_fingerprint.pkl'
 CKPT_DIR = './results/'
 MODEL_NAME = 'test.mdl'
 
@@ -38,6 +39,8 @@ argparser.register('type', 'bool', str2bool)
 
 argparser.add_argument('--data-path', type=str, default=DATA_PATH,
                        help='Dataset path')
+argparser.add_argument('--drug-path', type=str, default=DRUG_PATH,
+                       help='Input drug dictionary path')
 argparser.add_argument('--checkpoint-dir', type=str, default=CKPT_DIR,
                        help='Directory for model checkpoint')
 argparser.add_argument('--model-name', type=str, default=MODEL_NAME,
@@ -59,19 +62,19 @@ argparser.add_argument('--save-embed', type='bool', default=False,
 
 # Train config
 argparser.add_argument('--batch-size', type=int, default=32)
-argparser.add_argument('--epoch', type=int, default=100)
+argparser.add_argument('--epoch', type=int, default=40)
 argparser.add_argument('--learning-rate', type=float, default=1e-3)
 argparser.add_argument('--weight-decay', type=float, default=0)
 argparser.add_argument('--grad-max-norm', type=int, default=10)
 argparser.add_argument('--grad-clip', type=int, default=10)
 
 # Model config
-argparser.add_argument('--binary', type=int, default=1)
+argparser.add_argument('--binary', type='bool', default=True)
 argparser.add_argument('--hidden-dim', type=int, default=200)
 argparser.add_argument('--drug-embed-dim', type=int, default=300)
 argparser.add_argument('--lstm-layer', type=int, default=1)
-argparser.add_argument('--lstm-dr', type=int, default=0.0)
-argparser.add_argument('--linear-dr', type=int, default=0.0)
+argparser.add_argument('--lstm-dr', type=float, default=0.0)
+argparser.add_argument('--linear-dr', type=float, default=0.0)
 argparser.add_argument('--char-embed-dim', type=int, default=20)
 argparser.add_argument('--s-idx', type=int, default=1)
 argparser.add_argument('--rep-idx', type=int, default=0)
@@ -91,7 +94,8 @@ def run_experiment(model, dataset, run_fn, args):
     # Save embeddings and exit
     if args.save_embed:
         model.load_checkpoint(args.checkpoint_dir, args.model_name)
-        save_drug(model, dataset, args) 
+        drugs = pickle.load(open(args.drug_path, 'rb'))
+        save_drug(model, drugs, dataset, args) 
         sys.exit()
 
     # Get datasets
@@ -122,16 +126,20 @@ def run_experiment(model, dataset, run_fn, args):
         LOGGER.info('Load Validation/Testing')
         if args.train or args.resume:
             model.load_checkpoint(args.checkpoint_dir, args.model_name)
+        run_fn(model, valid_loader, dataset, args, train=False)
         run_fn(model, test_loader, dataset, args, train=False)
-        save_drug(model, dataset, args) 
+        save_drug(model, dataset.drugs, dataset, args) 
 
 
 def get_dataset(path):
     return pickle.load(open(path, 'rb'))
 
 
-def get_run_fn():
-    return run_drug
+def get_run_fn(args):
+    if args.binary:
+        return run_binary
+    else:
+        return run_regression
 
 
 def get_model(args, dataset):
@@ -187,7 +195,7 @@ def main():
 
     # Get datset, run function, model
     dataset = get_dataset(args.data_path)
-    run_fn = get_run_fn()
+    run_fn = get_run_fn(args)
     model = get_model(args, dataset)
 
     # Run experiment

@@ -48,6 +48,7 @@ class DrugDataset(object):
         self.ichar_maxlen = 0
         self.sub_lens = []
         self.PAD = 'PAD'
+        self.UNK = 'UNK'
 
     def register_schar(self, char):
         if char not in self.schar2idx:
@@ -66,7 +67,9 @@ class DrugDataset(object):
         INCHIKEY_IDX = 4
         drugs = {}
         self.register_ichar(self.PAD)
+        # self.register_ichar(self.UNK)
         self.register_schar(self.PAD)
+        # self.register_schar(self.UNK)
 
         with open(path) as f:
             csv_reader = csv.reader(f)
