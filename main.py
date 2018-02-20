@@ -23,7 +23,7 @@ from models.root.utils import *
 LOGGER = logging.getLogger()
 
 DATA_PATH = './tasks/data/drug/drug(v0.1).pkl'
-DRUG_PATH = './tasks/data/drug/tox21_smiles.pkl'
+DRUG_PATH = './tasks/data/drug/validation/sider_smiles_3.pkl'
 CKPT_DIR = './results/'
 MODEL_NAME = 'test.mdl'
 
@@ -100,7 +100,7 @@ def run_experiment(model, dataset, run_fn, args):
     # Save embeddings and exit
     if args.save_embed:
         model.load_checkpoint(args.checkpoint_dir, args.model_name)
-        run_fn(model, test_loader, dataset, args, train=False)
+        # run_fn(model, test_loader, dataset, args, train=False)
         drugs = pickle.load(open(args.drug_path, 'rb'))
         save_drug(model, drugs, dataset, args) 
         sys.exit()

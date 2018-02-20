@@ -113,7 +113,7 @@ def run_binary(model, loader, dataset, args, train=False):
     return f1_ku
 
 
-# TODO: change to regression (add correlation)
+# TODO: change to regression (add pearson + spearman correlation)
 def run_regression(model, loader, dataset, args, train=False):
     return None
 
@@ -126,7 +126,8 @@ def save_drug(model, dictionary, dataset, args):
 
     # Iterate drug dictionary
     for idx, (drug, rep) in enumerate(dictionary.items()):
-        d1_r = rep
+        d1_r = rep[0]
+        d1_k = rep[1]
         d1_l = len(d1_r)
 
         # For string data (smiles/inchikey)
@@ -137,7 +138,7 @@ def save_drug(model, dictionary, dataset, args):
             d1_l = len(d1_r)
 
         # Real valued for mol2vec
-        if dataset._rep_idx != 3:
+        if args.rep_idx != 3:
             d1_r = Variable(torch.LongTensor(d1_r)).cuda()
         else:
             d1_r = Variable(torch.FloatTensor(d1_r)).cuda()
@@ -148,13 +149,15 @@ def save_drug(model, dictionary, dataset, args):
         # Run model amd save embed
         _, embed1, embed2 = model(d1_r, d1_l, d1_r, d1_l)
         assert embed1.data.tolist() == embed2.data.tolist()
+        """
         known = False
-        for drug, reps in dataset.drugs.items():
-            if rep == reps[dataset._rep_idx]:
+        for pert_id, _ in dataset.drugs.items():
+            if drug == pert_id:
                 known = True
                 known_cnt += 1
                 break
-        key2vec[rep] = [embed1.squeeze().data.tolist(), known]
+        """
+        key2vec[drug] = [embed1.squeeze().data.tolist(), d1_k]
 
         # Print progress
         if idx % args.print_step == 0 or idx == len(dictionary) - 1:
@@ -163,7 +166,7 @@ def save_drug(model, dictionary, dataset, args):
             LOGGER.info(_progress)
 
     # Save embed as pickle
-    pickle.dump(key2vec, open('{}embed_{}.pkl'.format(
+    pickle.dump(key2vec, open('{}toxcast_embed_{}.pkl'.format(
                 args.checkpoint_dir, args.model_name), 'wb'), protocol=2)
     LOGGER.info('{}/{} number of known drugs.'.format(known_cnt, len(key2vec)))
 
@@ -173,19 +176,13 @@ def save_prediction(model, loader, dataset, args):
     model.eval()
     csv_writer = csv.writer(open(args.checkpoint_dir + 'pred_' + 
                                  args.model_name + '.csv', 'w'))
+    csv_writer.writerow(['pert1', 'pert1_known', 'pert2', 'pert2_known',
+                         'prediction', 'target'])
 
     for d_idx, (d1, d1_r, d1_l, d2, d2_r, d2_l, score) in enumerate(loader):
 
-        # Split for KK/KU/UU sets
-        kk_idx = np.argwhere([a in dataset.known and b in dataset.known
-                              for a, b in zip(d1, d2)]).flatten()
-        ku_idx = np.argwhere([(a in dataset.unknown) != (b in dataset.unknown)
-                              for a, b in zip(d1, d2)]).flatten()
-        uu_idx = np.argwhere([a in dataset.unknown and b in dataset.unknown
-                              for a, b in zip(d1, d2)]).flatten()
-        assert len(kk_idx) + len(ku_idx) + len(uu_idx) == len(d1)
-
-        outputs, embed1, embed2 = model(d1_r.cuda(), d1_l, d2_r.cuda(), d2_l)
+        # Run model for getting predictions
+        outputs, _, _ = model(d1_r.cuda(), d1_l, d2_r.cuda(), d2_l)
         predictions = outputs.data.cpu().numpy()
         targets = score.data.tolist()
 
@@ -196,5 +193,30 @@ def save_prediction(model, loader, dataset, args):
         # Print progress
         if d_idx % args.print_step == 0 or d_idx == len(loader) - 1:
             _progress = '{}/{} saving drug predictions..'.format(
+                d_idx + 1, len(loader))
+            LOGGER.info(_progress)
+
+
+# Outputs pred scores for new pair dataset
+def save_pair_scores(model, loader, dataset, args):
+    model.eval()
+    csv_writer = csv.writer(open(args.checkpoint_dir + 'scores_' + 
+                                 args.model_name + '.csv', 'w'))
+    csv_writer.writerow(['pert1', 'pert1_known', 'pert2', 'pert2_known',
+                         'prediction'])
+
+    for d_idx, (d1, d2) in enumerate(loader):
+
+        # Run model for getting predictions
+        outputs, _, _ = model(d1_r.cuda(), d1_l, d2_r.cuda(), d2_l)
+        predictions = outputs.data.cpu().numpy()
+
+        for a1, a2, a3 in zip(d1, d2, predictions):
+            csv_writer.writerow([a1, a1 in dataset.known, 
+                                 a2, a2 in dataset.known, a3])
+
+        # Print progress
+        if d_idx % args.print_step == 0 or d_idx == len(loader) - 1:
+            _progress = '{}/{} saving new pair predictions..'.format(
                 d_idx + 1, len(loader))
             LOGGER.info(_progress)
