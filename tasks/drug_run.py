@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 import logging
+import csv
 
 from datetime import datetime
 from sklearn.metrics import f1_score
@@ -104,9 +105,9 @@ def run_binary(model, loader, dataset, args, train=False):
 
     # End of an epoch
     et = (datetime.now() - start_time).total_seconds()
-    LOGGER.info('Total Loss: {:.3f} | F1: {:.3f} | '.format(
+    LOGGER.info('Results (Loss/F1/KK/KU/UU): {:.3f}\t{:.3f}\t'.format(
         sum(metrics['loss'])/len(metrics['loss']), f1) +
-        'KK: {:.3f} KU: {:.3f} UU: {:.3f}'.format(
+        '{:.3f}\t{:.3f}\t{:.3f}'.format(
         f1_kk, f1_ku, f1_uu))
 
     return f1_ku
@@ -121,7 +122,7 @@ def run_regression(model, loader, dataset, args, train=False):
 def save_drug(model, dictionary, dataset, args):
     model.eval()
     key2vec = {}
-    unk_cnt = 0
+    known_cnt = 0
 
     # Iterate drug dictionary
     for idx, (drug, rep) in enumerate(dictionary.items()):
@@ -130,7 +131,9 @@ def save_drug(model, dictionary, dataset, args):
 
         # For string data (smiles/inchikey)
         if args.rep_idx == 0 or args.rep_idx == 1:
-            d1_r = list(map(lambda x: dataset.char2idx[x], d1_r))
+            d1_r = list(map(lambda x: dataset.char2idx[x]
+                        if x in dataset.char2idx
+                        else dataset.char2idx[dataset.UNK], d1_r))
             d1_l = len(d1_r)
 
         # Real valued for mol2vec
@@ -145,28 +148,31 @@ def save_drug(model, dictionary, dataset, args):
         # Run model amd save embed
         _, embed1, embed2 = model(d1_r, d1_l, d1_r, d1_l)
         assert embed1.data.tolist() == embed2.data.tolist()
-        key2vec[drug] = [embed1.squeeze().data.tolist(), drug in dataset.known]
-
-        if drug not in dataset.known:
-            # assert drug in dataset.unknown
-            # TODO UNK check from smiles
-            unk_cnt += 1
+        known = False
+        for drug, reps in dataset.drugs.items():
+            if rep == reps[dataset._rep_idx]:
+                known = True
+                known_cnt += 1
+                break
+        key2vec[rep] = [embed1.squeeze().data.tolist(), known]
 
         # Print progress
         if idx % args.print_step == 0 or idx == len(dictionary) - 1:
             _progress = '{}/{} saving drug embeddings..'.format(
-                idx, len(dictionary))
+                idx + 1, len(dictionary))
             LOGGER.info(_progress)
 
     # Save embed as pickle
     pickle.dump(key2vec, open('{}embed_{}.pkl'.format(
                 args.checkpoint_dir, args.model_name), 'wb'), protocol=2)
-    LOGGER.info('{}/{} number of unknown drugs.'.format(unk_cnt, len(key2vec)))
+    LOGGER.info('{}/{} number of known drugs.'.format(known_cnt, len(key2vec)))
 
 
 # Outputs pred vs label scores given a dataloader
 def save_prediction(model, loader, dataset, args):
     model.eval()
+    csv_writer = csv.writer(open(args.checkpoint_dir + 'pred_' + 
+                                 args.model_name + '.csv', 'w'))
 
     for d_idx, (d1, d1_r, d1_l, d2, d2_r, d2_l, score) in enumerate(loader):
 
@@ -181,8 +187,14 @@ def save_prediction(model, loader, dataset, args):
 
         outputs, embed1, embed2 = model(d1_r.cuda(), d1_l, d2_r.cuda(), d2_l)
         predictions = outputs.data.cpu().numpy()
-        targets = score
+        targets = score.data.tolist()
 
-        print(predictions)
-        print(targets)
-        sys.exit()
+        for a1, a2, a3, a4 in zip(d1, d2, predictions, targets):
+            csv_writer.writerow([a1, a1 in dataset.known, 
+                                 a2, a2 in dataset.known, a3, a4])
+
+        # Print progress
+        if d_idx % args.print_step == 0 or d_idx == len(loader) - 1:
+            _progress = '{}/{} saving drug predictions..'.format(
+                d_idx + 1, len(loader))
+            LOGGER.info(_progress)

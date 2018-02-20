@@ -455,8 +455,8 @@ if __name__ == '__main__':
     #                  './data/drug/tox21_smiles.pkl',
     #                  './data/drug/tox21_fingerprint.pkl',
     #                  './data/drug/tox21_mol2vec.pkl']
-    drug_pair_path = './data/drug/drug_cscore_pair_0.2.csv'
-    save_preprocess = False
+    drug_pair_path = './data/drug/drug_cscore_pair_0.1.csv'
+    save_preprocess = True
     save_path = './data/drug/drug(tmp).pkl'
     load_path = './data/drug/drug(tmp).pkl'
 
@@ -474,6 +474,6 @@ if __name__ == '__main__':
 
     for idx, (d1, d1_r, d1_l, d2, d2_r, d2_l, score) in enumerate(
             dataset.get_dataloader(batch_size=1600, s_idx=1)[1]):
-        dataset.decode_data(d1_r[0], d1_l[0], d2_r[0], d2_l[0], score[0])
+        # dataset.decode_data(d1_r[0], d1_l[0], d2_r[0], d2_l[0], score[0])
         pass
 
