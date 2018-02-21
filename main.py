@@ -24,7 +24,11 @@ LOGGER = logging.getLogger()
 
 DATA_PATH = './tasks/data/drug/drug(v0.1).pkl'  # For training (Pair scores)
 DRUG_DIR = './tasks/data/drug/validation/'      # For validation (ex: tox21)
-DRUG_FILE = 'BBBP_mol2vec_3.pkl'                # File name for validation
+DRUG_FILES = ['BBBP_fingerprint_3.pkl',
+              'clintox_fingerprint_3.pkl',
+              'sider_fingerprint_3.pkl',
+              'tox21_fingerprint_3.pkl',
+              'toxcast_fingerprint_3.pkl',]
 PAIR_DIR = './tasks/data/drug/ki_zinc_pair/'    # New pair data for scoring
 CKPT_DIR = './results/'
 MODEL_NAME = 'test.mdl'
@@ -43,7 +47,7 @@ argparser.add_argument('--data-path', type=str, default=DATA_PATH,
                        help='Dataset path')
 argparser.add_argument('--drug-dir', type=str, default=DRUG_DIR,
                        help='Input drug dictionary')
-argparser.add_argument('--drug-file', type=str, default=DRUG_FILE,
+argparser.add_argument('--drug-files', type=str, default=DRUG_FILES,
                        help='Input drug file')
 argparser.add_argument('--pair-dir', type=str, default=PAIR_DIR,
                        help='Input new pairs')
@@ -108,22 +112,23 @@ def run_experiment(model, dataset, run_fn, args):
     # Save embeddings and exit
     if args.save_embed:
         model.load_checkpoint(args.checkpoint_dir, args.model_name)
-        # run_fn(model, test_loader, dataset, args, train=False)
-        drugs = pickle.load(open(args.drug_dir + args.drug_file, 'rb'))
-        save_embed(model, drugs, dataset, args) 
+        # run_fn(model, test_loader, dataset, args, metric, train=False)
+        for drug_file in args.drug_files:
+            drugs = pickle.load(open(args.drug_dir + drug_file, 'rb'))
+            save_embed(model, drugs, dataset, args, drug_file) 
         sys.exit()
     
     # Save predictions on test dataset and exit
     if args.save_prediction:
         model.load_checkpoint(args.checkpoint_dir, args.model_name)
-        # run_fn(model, test_loader, dataset, args, train=False)
+        # run_fn(model, test_loader, dataset, args, metric, train=False)
         save_prediction(model, test_loader, dataset, args)
         sys.exit()
 
     # Save pair predictions on pretrained model
     if args.save_pair_score:
         model.load_checkpoint(args.checkpoint_dir, args.model_name)
-        # run_fn(model, test_loader, dataset, args, train=False)
+        # run_fn(model, test_loader, dataset, args, metric, train=False)
         save_pair_score(model, args.pair_dir, dataset, args)
         sys.exit()
 
@@ -132,14 +137,23 @@ def run_experiment(model, dataset, run_fn, args):
         if args.resume:
             model.load_checkpoint(args.checkpoint_dir, args.model_name)
 
+        if args.binary:
+            from sklearn.metrics import f1_score
+            metric = f1_score
+            assert args.s_idx == 1
+        else:
+            metric = np.corrcoef
+            assert args.s_idx == 0
+
         best = 0.0
         for ep in range(args.epoch):
             LOGGER.info('Training Epoch %d' % (ep+1))
-            run_fn(model, train_loader, dataset, args, train=True)
+            run_fn(model, train_loader, dataset, args, metric, train=True)
 
             if args.valid:
                 LOGGER.info('Validation')
-                curr = run_fn(model, valid_loader, dataset, args, train=False)
+                curr = run_fn(model, valid_loader, dataset, args, 
+                              metric, train=False)
                 if not args.resume and curr > best:
                     best = curr
                     model.save_checkpoint({
@@ -151,8 +165,8 @@ def run_experiment(model, dataset, run_fn, args):
         LOGGER.info('Load Validation/Testing')
         if args.train or args.resume:
             model.load_checkpoint(args.checkpoint_dir, args.model_name)
-        run_fn(model, valid_loader, dataset, args, train=False)
-        run_fn(model, test_loader, dataset, args, train=False)
+        run_fn(model, valid_loader, dataset, args, metric, train=False)
+        run_fn(model, test_loader, dataset, args, metric, train=False)
 
 
 def get_dataset(path):
@@ -160,10 +174,7 @@ def get_dataset(path):
 
 
 def get_run_fn(args):
-    if args.binary:
-        return run_binary
-    else:
-        return run_regression
+    return run_drug
 
 
 def get_model(args, dataset):
@@ -194,7 +205,7 @@ def init_logging(args):
 
     # For logfile writing
     logfile = logging.FileHandler(
-        args.checkpoint_dir + args.model_name + '.txt', 'w')
+        args.checkpoint_dir + 'logs/' + args.model_name + '.txt', 'w')
     logfile.setFormatter(fmt)
     LOGGER.addHandler(logfile)
 

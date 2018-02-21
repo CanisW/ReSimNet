@@ -10,7 +10,6 @@ import csv
 import os
 
 from datetime import datetime
-from sklearn.metrics import f1_score
 from torch.autograd import Variable
 from models.root.utils import *
 
@@ -18,9 +17,9 @@ from models.root.utils import *
 LOGGER = logging.getLogger(__name__)
 
 
-def run_binary(model, loader, dataset, args, train=False):
+def run_drug(model, loader, dataset, args, metric, train=False):
     total_step = 0.0
-    metrics = {'loss':[]}
+    stats = {'loss':[]}
     tar_set = []
     pred_set = []
     kk_tar_set = []
@@ -50,7 +49,7 @@ def run_binary(model, loader, dataset, args, train=False):
         # Get outputs
         outputs, embed1, embed2 = model(d1_r.cuda(), d1_l, d2_r.cuda(), d2_l)
         loss = model.get_loss(outputs, score.cuda())
-        metrics['loss'] += [loss.data[0]]
+        stats['loss'] += [loss.data[0]]
         total_step += 1.0
 
         # Metrics for binary classification
@@ -69,10 +68,17 @@ def run_binary(model, loader, dataset, args, train=False):
         uu_pred_set += list(tmp_pred[uu_idx])
     
         # Calculate current f1 scores
-        f1 = f1_score(list(tmp_tar[:]), list(tmp_pred[:]))
-        f1_kk = f1_score(list(tmp_tar[kk_idx]), list(tmp_pred[kk_idx]))
-        f1_ku = f1_score(list(tmp_tar[ku_idx]), list(tmp_pred[ku_idx]))
-        f1_uu = f1_score(list(tmp_tar[uu_idx]), list(tmp_pred[uu_idx]))
+        f1 = metric(list(tmp_tar[:]), list(tmp_pred[:]))
+        f1_kk = metric(list(tmp_tar[kk_idx]), list(tmp_pred[kk_idx]))
+        f1_ku = metric(list(tmp_tar[ku_idx]), list(tmp_pred[ku_idx]))
+        f1_uu = metric(list(tmp_tar[uu_idx]), list(tmp_pred[uu_idx]))
+
+        # for regression
+        if args.binary == 0:
+            f1 = f1[0][1]
+            f1_kk = f1_kk[0][1]
+            f1_ku = f1_ku[0][1]
+            f1_uu = f1_uu[0][1]
 
         # Optimize model
         if train and not args.save_embed:
@@ -97,30 +103,30 @@ def run_binary(model, loader, dataset, args, train=False):
             LOGGER.info(_progress)
 
     # Calculate acuumulated f1 scores
-    f1 = f1_score(tar_set, pred_set, average='binary')
-    f1_kk = f1_score(kk_tar_set, kk_pred_set, average='binary')
-    f1_ku = f1_score(ku_tar_set, ku_pred_set, average='binary')
-    f1_uu = f1_score(uu_tar_set, uu_pred_set, average='binary')
+    f1 = metric(tar_set, pred_set)
+    f1_kk = metric(kk_tar_set, kk_pred_set)
+    f1_ku = metric(ku_tar_set, ku_pred_set)
+    f1_uu = metric(uu_tar_set, uu_pred_set)
+    if args.binary == 0:
+        f1 = f1[0][1]
+        f1_kk = f1_kk[0][1]
+        f1_ku = f1_ku[0][1]
+        f1_uu = f1_uu[0][1]
 
     # TODO add spearman correlation
 
     # End of an epoch
     et = (datetime.now() - start_time).total_seconds()
     LOGGER.info('Results (Loss/F1/KK/KU/UU): {:.3f}\t{:.3f}\t'.format(
-        sum(metrics['loss'])/len(metrics['loss']), f1) +
+        sum(stats['loss'])/len(stats['loss']), f1) +
         '{:.3f}\t{:.3f}\t{:.3f}'.format(
         f1_kk, f1_ku, f1_uu))
 
     return f1_ku
 
 
-# TODO: change to regression (add pearson + spearman correlation)
-def run_regression(model, loader, dataset, args, train=False):
-    return None
-
-
 # Outputs response embeddings for a given dictionary
-def save_embed(model, dictionary, dataset, args):
+def save_embed(model, dictionary, dataset, args, drug_file):
     model.eval()
     key2vec = {}
     known_cnt = 0
@@ -167,8 +173,8 @@ def save_embed(model, dictionary, dataset, args):
             LOGGER.info(_progress)
 
     # Save embed as pickle
-    pickle.dump(key2vec, open('{}{}_embed_{}.pkl'.format(
-                args.checkpoint_dir, args.drug_file, args.model_name), 'wb'), 
+    pickle.dump(key2vec, open('{}/embed/{}.{}.pkl'.format(
+                args.checkpoint_dir, drug_file, args.model_name), 'wb'), 
                 protocol=2)
     LOGGER.info('{}/{} number of known drugs.'.format(known_cnt, len(key2vec)))
 
@@ -205,18 +211,30 @@ def save_pair_score(model, pair_dir, dataset, args):
 
     # Iterate directory
     for subdir, _, files in os.walk(pair_dir):
+        start = False
         for file_ in sorted(files):
             LOGGER.info('processing {}..'.format(file_))
+            """
+            if file_ != 'BGAB.csv' and start is False:
+                continue
+            else:
+                start = True
+            """
 
             with open(os.path.join(subdir, file_)) as f:
 
                 # Ready for reader and writer
                 csv_reader = csv.reader(f)
-                csv_writer = csv.writer(open(args.checkpoint_dir + file_ + '.' 
-                                             + args.model_name + '.pred', 'w'))
+                csv_writer = csv.writer(open(args.checkpoint_dir + 'pairs/' +
+                                             file_ + '.' + args.model_name + 
+                                             '.pred', 'w'))
                 csv_writer.writerow(['pert1', 'pert1_known', 
                                      'pert2', 'pert2_known',
                                      'prediction'])
+                # For stats
+                stats = {'kk': 0, 'ku': 0, 'uu': 0}
+                batch = []
+                kk_info = []
 
                 # Iterate reader
                 for row_idx, row in enumerate(csv_reader):
@@ -229,34 +247,48 @@ def save_pair_score(model, pair_dir, dataset, args):
                     rep1, rep2 = row
 
                     # Check if drug is known
-                    rep1_k = next((item for item in dataset.drugs
-                                  if item[0] == rep1), None) != None
-                    rep2_k = next((item for item in dataset.drugs
-                                  if item[0] == rep2), None) != None
+                    rep1_k = next((reps for _, reps in dataset.drugs.items()
+                                  if reps[0] == rep1), None) != None
+                    rep2_k = next((reps for _, reps in dataset.drugs.items()
+                                  if reps[0] == rep2), None) != None
+                    if rep1_k and rep2_k:
+                        stats['kk'] += 1
+                    elif rep1_k != rep2_k:
+                        stats['ku'] += 1
+                    else:
+                        stats['uu'] += 1
 
-                    # Convert to tensors
-                    # TODO make transformer function in dataset.py
-                    d1_r = list(map(lambda x: dataset.char2idx[x]
-                                if x in dataset.char2idx
-                                else dataset.char2idx[dataset.UNK], rep1))
-                    d1_l = len(rep1)
-                    d2_r = list(map(lambda x: dataset.char2idx[x]
-                                if x in dataset.char2idx
-                                else dataset.char2idx[dataset.UNK], rep2))
-                    d2_l = len(rep2)
+                    # Gather examples
+                    example = ['pert1', rep1, len(rep1), 
+                               'pert2', rep2, len(rep2), 0]
+                    batch.append(example)
+                    kk_info.append([rep1_k, rep2_k])
 
-                    d1_r = Variable(torch.LongTensor(d1_r)).cuda()
-                    d1_l = torch.LongTensor(np.array([d1_l]))
-                    d1_r = d1_r.unsqueeze(0)
-                    d1_l = d1_l.unsqueeze(0)
-                    d2_r = Variable(torch.LongTensor(d2_r)).cuda()
-                    d2_l = torch.LongTensor(np.array([d2_l]))
-                    d2_r = d2_r.unsqueeze(0)
-                    d2_l = d2_l.unsqueeze(0)
+                    # Run model for each batch
+                    if len(batch) == 128:
+                        inputs = dataset.collate_fn(batch)
 
-                    # Run model
-                    output, _, _ = model(d1_r, d1_l, d2_r, d2_l)
-                    pred = output.data.tolist()[0][0]
+                        # Run model
+                        output, _, _ = model(inputs[1].cuda(), inputs[2],
+                                             inputs[4].cuda(), inputs[5])
+                        pred = output.data.tolist()
+                    
+                        assert len(batch) == len(kk_info) == len(pred)
+                        for ex, is_kk, p in zip(batch, kk_info, pred):
+                            csv_writer.writerow([ex[1], is_kk[0], 
+                                                 ex[4], is_kk[1], p])
+                        batch = []
+                        kk_info = []
 
-                    csv_writer.writerow([rep1, rep1_k, rep2, rep2_k, pred]) 
+                # Remaining batches
+                if len(batch) > 0:
+                    inputs = dataset.collate_fn(batch)
+                    output, _, _ = model(inputs[1].cuda(), inputs[2],
+                                         inputs[4].cuda(), inputs[5])
+                    pred = output.data.tolist()
+                    assert len(batch) == len(kk_info) == len(pred)
+                    for ex, is_kk, p in zip(batch, kk_info, pred):
+                        csv_writer.writerow([ex[1], is_kk[0], 
+                                             ex[4], is_kk[1], p])
 
+                LOGGER.info('kk/ku/uu stats: {}..'.format(sorted(stats.items())))

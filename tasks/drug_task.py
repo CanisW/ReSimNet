@@ -276,13 +276,17 @@ class DrugDataset(object):
         for idx, ex in enumerate(batch):
             drug1_rep = ex[1]
             if self._rep_idx < 2:
-                drug1_rep = list(map(lambda x: self.char2idx[x], ex[1]))
+                drug1_rep = list(map(lambda x: self.char2idx[x]
+                                     if x in self.char2idx
+                                     else self.char2idx[self.UNK], ex[1]))
             drug1_rep = torch.FloatTensor(drug1_rep)
             drug1_reps[idx, :drug1_rep.size(0)].copy_(drug1_rep)
 
             drug2_rep = ex[4]
             if self._rep_idx < 2:
-                drug2_rep = list(map(lambda x: self.char2idx[x], ex[4]))
+                drug2_rep = list(map(lambda x: self.char2idx[x]
+                                     if x in self.char2idx
+                                     else self.char2idx[self.UNK], ex[4]))
             drug2_rep = torch.FloatTensor(drug2_rep)
             drug2_reps[idx, :drug2_rep.size(0)].copy_(drug2_rep)
 
@@ -386,6 +390,8 @@ class Representation(Dataset):
         score = scores[self.s_idx]
         if self.s_idx == 1:
             score = float(score > 0)
+        else:
+            score = score / 100.
         return drug1, drug1_rep, drug1_len, drug2, drug2_rep, drug2_len, score
     
     def lengths(self):
@@ -451,14 +457,10 @@ if __name__ == '__main__':
     drug_id_path = './data/drug/drug_info_1.0.csv'
     drug_sub_path = ['./data/drug/drug_fingerprint_2.0_p2.pkl',
                      './data/drug/drug_mol2vec_2.0_p2.pkl']
-    # drug_sub_path = ['./data/drug/tox21_smiles.pkl',
-    #                  './data/drug/tox21_smiles.pkl',
-    #                  './data/drug/tox21_fingerprint.pkl',
-    #                  './data/drug/tox21_mol2vec.pkl']
-    drug_pair_path = './data/drug/drug_cscore_pair_0.1.csv'
-    save_preprocess = True
+    drug_pair_path = './data/drug/drug_cscore_pair_0.3.csv'
+    save_preprocess = False
     save_path = './data/drug/drug(tmp).pkl'
-    load_path = './data/drug/drug(tmp).pkl'
+    load_path = './data/drug/drug(v0.3).pkl'
 
     # Save or load dataset
     if save_preprocess:
@@ -474,6 +476,6 @@ if __name__ == '__main__':
 
     for idx, (d1, d1_r, d1_l, d2, d2_r, d2_l, score) in enumerate(
             dataset.get_dataloader(batch_size=1600, s_idx=1)[1]):
-        # dataset.decode_data(d1_r[0], d1_l[0], d2_r[0], d2_l[0], score[0])
+        dataset.decode_data(d1_r[0], d1_l[0], d2_r[0], d2_l[0], score[0])
         pass
 
