@@ -22,8 +22,10 @@ from models.root.utils import *
 
 LOGGER = logging.getLogger()
 
-DATA_PATH = './tasks/data/drug/drug(v0.1).pkl'
-DRUG_PATH = './tasks/data/drug/validation/sider_smiles_3.pkl'
+DATA_PATH = './tasks/data/drug/drug(v0.1).pkl'  # For training (Pair scores)
+DRUG_DIR = './tasks/data/drug/validation/'      # For validation (ex: tox21)
+DRUG_FILE = 'BBBP_mol2vec_3.pkl'                # File name for validation
+PAIR_DIR = './tasks/data/drug/ki_zinc_pair/'    # New pair data for scoring
 CKPT_DIR = './results/'
 MODEL_NAME = 'test.mdl'
 
@@ -39,8 +41,12 @@ argparser.register('type', 'bool', str2bool)
 
 argparser.add_argument('--data-path', type=str, default=DATA_PATH,
                        help='Dataset path')
-argparser.add_argument('--drug-path', type=str, default=DRUG_PATH,
-                       help='Input drug dictionary path')
+argparser.add_argument('--drug-dir', type=str, default=DRUG_DIR,
+                       help='Input drug dictionary')
+argparser.add_argument('--drug-file', type=str, default=DRUG_FILE,
+                       help='Input drug file')
+argparser.add_argument('--pair-dir', type=str, default=PAIR_DIR,
+                       help='Input new pairs')
 argparser.add_argument('--checkpoint-dir', type=str, default=CKPT_DIR,
                        help='Directory for model checkpoint')
 argparser.add_argument('--model-name', type=str, default=MODEL_NAME,
@@ -60,6 +66,8 @@ argparser.add_argument('--debug', type='bool', default=False,
 argparser.add_argument('--save-embed', type='bool', default=False,
                        help='Save embeddings with loaded model')
 argparser.add_argument('--save-prediction', type='bool', default=False,
+                       help='Save predictions with loaded model')
+argparser.add_argument('--save-pair-score', type='bool', default=False,
                        help='Save predictions with loaded model')
 
 # Train config
@@ -101,8 +109,8 @@ def run_experiment(model, dataset, run_fn, args):
     if args.save_embed:
         model.load_checkpoint(args.checkpoint_dir, args.model_name)
         # run_fn(model, test_loader, dataset, args, train=False)
-        drugs = pickle.load(open(args.drug_path, 'rb'))
-        save_drug(model, drugs, dataset, args) 
+        drugs = pickle.load(open(args.drug_dir + args.drug_file, 'rb'))
+        save_embed(model, drugs, dataset, args) 
         sys.exit()
     
     # Save predictions on test dataset and exit
@@ -110,6 +118,13 @@ def run_experiment(model, dataset, run_fn, args):
         model.load_checkpoint(args.checkpoint_dir, args.model_name)
         # run_fn(model, test_loader, dataset, args, train=False)
         save_prediction(model, test_loader, dataset, args)
+        sys.exit()
+
+    # Save pair predictions on pretrained model
+    if args.save_pair_score:
+        model.load_checkpoint(args.checkpoint_dir, args.model_name)
+        # run_fn(model, test_loader, dataset, args, train=False)
+        save_pair_score(model, args.pair_dir, dataset, args)
         sys.exit()
 
     # Save and load model during experiments

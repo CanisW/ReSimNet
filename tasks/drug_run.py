@@ -7,6 +7,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 import logging
 import csv
+import os
 
 from datetime import datetime
 from sklearn.metrics import f1_score
@@ -119,7 +120,7 @@ def run_regression(model, loader, dataset, args, train=False):
 
 
 # Outputs response embeddings for a given dictionary
-def save_drug(model, dictionary, dataset, args):
+def save_embed(model, dictionary, dataset, args):
     model.eval()
     key2vec = {}
     known_cnt = 0
@@ -166,8 +167,9 @@ def save_drug(model, dictionary, dataset, args):
             LOGGER.info(_progress)
 
     # Save embed as pickle
-    pickle.dump(key2vec, open('{}toxcast_embed_{}.pkl'.format(
-                args.checkpoint_dir, args.model_name), 'wb'), protocol=2)
+    pickle.dump(key2vec, open('{}{}_embed_{}.pkl'.format(
+                args.checkpoint_dir, args.drug_file, args.model_name), 'wb'), 
+                protocol=2)
     LOGGER.info('{}/{} number of known drugs.'.format(known_cnt, len(key2vec)))
 
 
@@ -198,25 +200,63 @@ def save_prediction(model, loader, dataset, args):
 
 
 # Outputs pred scores for new pair dataset
-def save_pair_scores(model, loader, dataset, args):
+def save_pair_score(model, pair_dir, dataset, args):
     model.eval()
-    csv_writer = csv.writer(open(args.checkpoint_dir + 'scores_' + 
-                                 args.model_name + '.csv', 'w'))
-    csv_writer.writerow(['pert1', 'pert1_known', 'pert2', 'pert2_known',
-                         'prediction'])
 
-    for d_idx, (d1, d2) in enumerate(loader):
+    # Iterate directory
+    for subdir, _, files in os.walk(pair_dir):
+        for file_ in sorted(files):
+            LOGGER.info('processing {}..'.format(file_))
 
-        # Run model for getting predictions
-        outputs, _, _ = model(d1_r.cuda(), d1_l, d2_r.cuda(), d2_l)
-        predictions = outputs.data.cpu().numpy()
+            with open(os.path.join(subdir, file_)) as f:
 
-        for a1, a2, a3 in zip(d1, d2, predictions):
-            csv_writer.writerow([a1, a1 in dataset.known, 
-                                 a2, a2 in dataset.known, a3])
+                # Ready for reader and writer
+                csv_reader = csv.reader(f)
+                csv_writer = csv.writer(open(args.checkpoint_dir + file_ + '.' 
+                                             + args.model_name + '.pred', 'w'))
+                csv_writer.writerow(['pert1', 'pert1_known', 
+                                     'pert2', 'pert2_known',
+                                     'prediction'])
 
-        # Print progress
-        if d_idx % args.print_step == 0 or d_idx == len(loader) - 1:
-            _progress = '{}/{} saving new pair predictions..'.format(
-                d_idx + 1, len(loader))
-            LOGGER.info(_progress)
+                # Iterate reader
+                for row_idx, row in enumerate(csv_reader):
+                    if row_idx == 0:
+                        # print(row)
+                        continue
+
+                    # Assume each representation is smiles.
+                    assert args.rep_idx == 0
+                    rep1, rep2 = row
+
+                    # Check if drug is known
+                    rep1_k = next((item for item in dataset.drugs
+                                  if item[0] == rep1), None) != None
+                    rep2_k = next((item for item in dataset.drugs
+                                  if item[0] == rep2), None) != None
+
+                    # Convert to tensors
+                    # TODO make transformer function in dataset.py
+                    d1_r = list(map(lambda x: dataset.char2idx[x]
+                                if x in dataset.char2idx
+                                else dataset.char2idx[dataset.UNK], rep1))
+                    d1_l = len(rep1)
+                    d2_r = list(map(lambda x: dataset.char2idx[x]
+                                if x in dataset.char2idx
+                                else dataset.char2idx[dataset.UNK], rep2))
+                    d2_l = len(rep2)
+
+                    d1_r = Variable(torch.LongTensor(d1_r)).cuda()
+                    d1_l = torch.LongTensor(np.array([d1_l]))
+                    d1_r = d1_r.unsqueeze(0)
+                    d1_l = d1_l.unsqueeze(0)
+                    d2_r = Variable(torch.LongTensor(d2_r)).cuda()
+                    d2_l = torch.LongTensor(np.array([d2_l]))
+                    d2_r = d2_r.unsqueeze(0)
+                    d2_l = d2_l.unsqueeze(0)
+
+                    # Run model
+                    output, _, _ = model(d1_r, d1_l, d2_r, d2_l)
+                    pred = output.data.tolist()[0][0]
+
+                    csv_writer.writerow([rep1, rep1_k, rep2, rep2_k, pred]) 
+

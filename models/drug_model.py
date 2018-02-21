@@ -65,6 +65,7 @@ class DrugModel(nn.Module):
 
     # Set Siamese network as basic LSTM
     def siamese_sequence(self, inputs, length):
+
         # Character embedding
         c_embed = self.char_embed(inputs)
 
