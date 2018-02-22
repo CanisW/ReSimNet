@@ -103,6 +103,20 @@ def run_drug(model, loader, dataset, args, metric, train=False):
                 et//3600, et%3600//60, et%60))
             LOGGER.info(_progress)
 
+    # Sort by tar_set and gather top, lower 10%
+    def sort_and_slice(list1, list2):
+        list1, list2 = (list(t) for t in zip(*sorted(
+                        zip(list1, list2), reverse=True)))
+        list1 = list1[:len(list1)//100] + list1[-len(list1)//100:]
+        list2 = list2[:len(list2)//100] + list2[-len(list2)//100:]
+        return list1, list2
+
+    if args.top_only:
+        tar_set, pred_set = sort_and_slice(tar_set, pred_set)
+        kk_tar_set, kk_pred_set = sort_and_slice(kk_tar_set, kk_pred_set)
+        ku_tar_set, ku_pred_set = sort_and_slice(ku_tar_set, ku_pred_set)
+        uu_tar_set, uu_pred_set = sort_and_slice(uu_tar_set, uu_pred_set)
+
     # Calculate acuumulated f1 scores
     f1 = metric(tar_set, pred_set)
     f1_kk = metric(kk_tar_set, kk_pred_set)

@@ -73,6 +73,8 @@ argparser.add_argument('--save-prediction', type='bool', default=False,
                        help='Save predictions with loaded model')
 argparser.add_argument('--save-pair-score', type='bool', default=False,
                        help='Save predictions with loaded model')
+argparser.add_argument('--top-only', type='bool', default=False,
+                       help='Return top/bottom 10% results only')
 
 # Train config
 argparser.add_argument('--batch-size', type=int, default=32)
