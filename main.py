@@ -108,6 +108,15 @@ def run_experiment(model, dataset, run_fn, args):
     # Get dataloaders
     train_loader, valid_loader, test_loader = dataset.get_dataloader(
         batch_size=args.batch_size, s_idx=args.s_idx) 
+
+    # Set metrics
+    if args.binary:
+        from sklearn.metrics import f1_score
+        metric = f1_score
+        assert args.s_idx == 1
+    else:
+        metric = np.corrcoef
+        assert args.s_idx == 0
     
     # Save embeddings and exit
     if args.save_embed:
@@ -136,14 +145,6 @@ def run_experiment(model, dataset, run_fn, args):
     if args.train:
         if args.resume:
             model.load_checkpoint(args.checkpoint_dir, args.model_name)
-
-        if args.binary:
-            from sklearn.metrics import f1_score
-            metric = f1_score
-            assert args.s_idx == 1
-        else:
-            metric = np.corrcoef
-            assert args.s_idx == 0
 
         best = 0.0
         for ep in range(args.epoch):
