@@ -22,7 +22,7 @@ from models.root.utils import *
 
 LOGGER = logging.getLogger()
 
-DATA_PATH = './tasks/data/drug/drug(v0.1).pkl'  # For training (Pair scores)
+DATA_PATH = './tasks/data/drug/drug(v0.3).pkl'  # For training (Pair scores)
 DRUG_DIR = './tasks/data/drug/validation/'      # For validation (ex: tox21)
 DRUG_FILES = ['BBBP_fingerprint_3.pkl',
               'clintox_fingerprint_3.pkl',
@@ -85,7 +85,7 @@ argparser.add_argument('--grad-clip', type=int, default=10)
 # Model config
 argparser.add_argument('--binary', type='bool', default=True)
 argparser.add_argument('--hidden-dim', type=int, default=200)
-argparser.add_argument('--drug-embed-dim', type=int, default=300)
+argparser.add_argument('--drug-embed-dim', type=int, default=80)
 argparser.add_argument('--lstm-layer', type=int, default=1)
 argparser.add_argument('--lstm-dr', type=float, default=0.0)
 argparser.add_argument('--linear-dr', type=float, default=0.0)

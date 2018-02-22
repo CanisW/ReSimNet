@@ -55,7 +55,8 @@ def run_drug(model, loader, dataset, args, metric, train=False):
         # Metrics for binary classification
         tmp_tar = score.data.cpu().numpy()
         tmp_pred = outputs.data.cpu().numpy()
-        tmp_pred = np.array([float(p > 0.5) for p in tmp_pred[:]])
+        if args.binary:
+            tmp_pred = np.array([float(p > 0.5) for p in tmp_pred[:]])
 
         # Accumulate for final evaluation
         tar_set += list(tmp_tar[:])
@@ -74,7 +75,7 @@ def run_drug(model, loader, dataset, args, metric, train=False):
         f1_uu = metric(list(tmp_tar[uu_idx]), list(tmp_pred[uu_idx]))
 
         # for regression
-        if args.binary == 0:
+        if not args.binary:
             f1 = f1[0][1]
             f1_kk = f1_kk[0][1]
             f1_ku = f1_ku[0][1]
@@ -107,7 +108,7 @@ def run_drug(model, loader, dataset, args, metric, train=False):
     f1_kk = metric(kk_tar_set, kk_pred_set)
     f1_ku = metric(ku_tar_set, ku_pred_set)
     f1_uu = metric(uu_tar_set, uu_pred_set)
-    if args.binary == 0:
+    if not args.binary:
         f1 = f1[0][1]
         f1_kk = f1_kk[0][1]
         f1_ku = f1_ku[0][1]
