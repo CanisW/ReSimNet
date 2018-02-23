@@ -105,17 +105,23 @@ def run_drug(model, loader, dataset, args, metric, train=False):
 
     # Sort by tar_set and gather top, lower 10%
     def sort_and_slice(list1, list2):
-        list1, list2 = (list(t) for t in zip(*sorted(
-                        zip(list1, list2), reverse=True)))
+        list2, list1 = (list(t) for t in zip(*sorted(
+                        zip(list2, list1), reverse=True)))
         list1 = list1[:len(list1)//100] + list1[-len(list1)//100:]
+        # list1 = list1[-len(list1)//100:]
         list2 = list2[:len(list2)//100] + list2[-len(list2)//100:]
+        # list2 = list2[-len(list2)//100:]
         return list1, list2
 
     if args.top_only:
         tar_set, pred_set = sort_and_slice(tar_set, pred_set)
+        print(tar_set[:10], pred_set[:10])
         kk_tar_set, kk_pred_set = sort_and_slice(kk_tar_set, kk_pred_set)
+        print(kk_tar_set[:10], kk_pred_set[:10])
         ku_tar_set, ku_pred_set = sort_and_slice(ku_tar_set, ku_pred_set)
+        print(ku_tar_set[:10], ku_pred_set[:10])
         uu_tar_set, uu_pred_set = sort_and_slice(uu_tar_set, uu_pred_set)
+        print(uu_tar_set[:10], uu_pred_set[:10])
 
     # Calculate acuumulated f1 scores
     f1 = metric(tar_set, pred_set)

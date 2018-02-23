@@ -17,7 +17,7 @@ LOGGER = logging.getLogger(__name__)
 
 class DrugModel(nn.Module):
     def __init__(self, input_dim, output_dim, hidden_dim, drug_embed_dim,
-            lstm_layer, lstm_dropout, linear_dropout, char_vocab_size, 
+            lstm_layer, lstm_dropout, bi_lstm, linear_dropout, char_vocab_size,
             char_embed_dim, dist_fn, learning_rate, binary, is_mlp):
 
         super(DrugModel, self).__init__()
@@ -34,18 +34,19 @@ class DrugModel(nn.Module):
             self.char_embed = nn.Embedding(char_vocab_size, char_embed_dim, 
                                            padding_idx=0)
             self.lstm = nn.LSTM(char_embed_dim, drug_embed_dim, lstm_layer,
+                                bidirectional=bi_lstm,
                                 batch_first=True, dropout=lstm_dropout)
         # For rep_ix 2, 3
         else:
             self.fc1 = nn.Sequential(
                 nn.Linear(input_dim, hidden_dim),
                 nn.Sigmoid(),
-                nn.Linear(hidden_dim, drug_embed_dim)
+                nn.Linear(hidden_dim, drug_embed_dim * 2)
             )
 
         self.dist_fc = nn.Sequential(
             nn.Dropout(linear_dropout),
-            nn.Linear(drug_embed_dim, 1)
+            nn.Linear(drug_embed_dim * 2, 1)
         )
 
         # Get params and register optimizer
@@ -59,9 +60,9 @@ class DrugModel(nn.Module):
 
     def init_lstm_h(self, batch_size):
         return (Variable(torch.zeros(
-            	self.lstm_layer*1, batch_size, self.drug_embed_dim)).cuda(),
+            	self.lstm_layer*2, batch_size, self.drug_embed_dim)).cuda(),
                 Variable(torch.zeros(
-            	self.lstm_layer*1, batch_size, self.drug_embed_dim)).cuda())
+            	self.lstm_layer*2, batch_size, self.drug_embed_dim)).cuda())
 
     # Set Siamese network as basic LSTM
     def siamese_sequence(self, inputs, length):
@@ -92,13 +93,21 @@ class DrugModel(nn.Module):
         c_pad, _ = pad_packed_sequence(lstm_out, batch_first=True)
         lstm_out = c_pad.index_select(0, Variable(unsort_idx).cuda())
         '''
-        lstm_out = lstm_out.contiguous().view(-1, self.drug_embed_dim)
+        lstm_out = lstm_out.contiguous().view(-1, self.drug_embed_dim * 2)
 
         # Select length
-        input_lens = (torch.arange(0, inputs.size(0)).long()
-                * maxlen + length - 1).cuda()
-        selected = lstm_out[input_lens,:]
-        return selected
+        fw_lens = (torch.arange(0, inputs.size(0)).long()
+                   * maxlen + length - 1).cuda()
+        bw_lens = (torch.arange(0, inputs.size(0)).long() * maxlen).cuda()
+        fw_selected = lstm_out[fw_lens,:]
+        fw_states = fw_selected[:,:self.drug_embed_dim]
+        bw_selected = lstm_out[bw_lens,:]
+        bw_states = bw_selected[:,self.drug_embed_dim:]
+
+        # Concat fw, bw states
+        outputs = torch.cat([fw_states, bw_states], dim=1)
+
+        return outputs
     
     def siamese_basic(self, inputs):
         return self.fc1(inputs.float())
