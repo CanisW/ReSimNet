@@ -48,7 +48,7 @@ class DrugModel(nn.Module):
 
         self.dist_fc = nn.Sequential(
             nn.Dropout(linear_dropout),
-            nn.Linear(drug_embed_dim * 6, 1)
+            nn.Linear(drug_embed_dim * 2, 1)
         )
 
         # Get params and register optimizer
@@ -95,7 +95,7 @@ class DrugModel(nn.Module):
         lstm_out, states = self.lstm(c_packed, init_lstm_h)
 
         hidden = torch.transpose(states[0], 0, 1).contiguous().view(
-                                 -1, 6 * self.drug_embed_dim)
+                                 -1, 2 * self.drug_embed_dim)
         if not self.training:
             # Unsort hidden states
             outputs = hidden.index_select(0, Variable(unsort_idx).cuda())

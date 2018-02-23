@@ -64,7 +64,7 @@ class DrugDataset(object):
         print('### Drug ID processing {}'.format(path))
         PERT_IDX = 0
         SMILES_IDX = 3
-        INCHIKEY_IDX = 4
+        INCHIKEY_IDX = -1
         drugs = {}
         self.register_ichar(self.PAD)
         self.register_ichar(self.UNK)
@@ -109,13 +109,6 @@ class DrugDataset(object):
             for drug, rep in drug2rep.items():
                 if drug not in drugs:
                     drugs[drug] = [rep]
-                    
-                    # Update drug characters and max length for smiles
-                    if 'smiles' in path:
-                        list(map(lambda x: self.register_schar(x), rep))
-                        self.schar_maxlen = self.schar_maxlen \
-                                if self.schar_maxlen > len(rep) else len(rep)
-
                 else:
                     drugs[drug].append(rep)
             self.sub_lens.append(len(rep))
@@ -305,7 +298,6 @@ class DrugDataset(object):
         return (drug1_raws, drug1_reps, drug1_lens, 
                 drug2_raws, drug2_reps, drug2_lens, scores)
 
-
     def decode_data(self, d1, d1_l, d2, d2_l, score):
         d1 = d1.data.tolist()
         d2 = d2.data.tolist()
@@ -378,6 +370,11 @@ class Representation(Dataset):
 
     def __getitem__(self, index):
         example = self.examples[index]
+        next_idx = index
+        while (self.drugs[example[0]][self.rep_idx] == 'None' or
+               self.drugs[example[1]][self.rep_idx] == 'None'):
+            next_idx = (next_idx + 1) % len(self.examples)
+            example = self.examples[next_idx]
         drug1, drug2, scores = example
 
         # Choose drug representation
@@ -385,6 +382,10 @@ class Representation(Dataset):
         drug1_len = len(drug1_rep)
         drug2_rep = self.drugs[drug2][self.rep_idx]
         drug2_len = len(drug2_rep)
+        
+        # Inchi None check
+        if self.rep_idx == 1:
+            assert drug1_rep != 'None' and drug2_rep != 'None'
 
         # s_idx == 1 means binary classification
         score = scores[self.s_idx]
@@ -399,7 +400,7 @@ class Representation(Dataset):
             drug1_len = len(self.drugs[ex[0]][self.rep_idx])
             drug2_len = len(self.drugs[ex[1]][self.rep_idx])
             length = drug1_len if drug1_len > drug2_len else drug2_len
-            return length
+            return [length, drug1_len, drug2_len]
         return [get_longer_length(ex) for ex in self.examples]
 
 
@@ -411,10 +412,11 @@ class SortedBatchSampler(Sampler):
 
     def __iter__(self):
         lengths = np.array(
-            [(l, np.random.random()) for l in self.lengths],
-            dtype=[('l', np.int_), ('rand', np.float_)]
+            [(l1, l2, l3, np.random.random()) for l1, l2, l3 in self.lengths],
+            dtype=[('l1', np.int_), ('l2', np.int_), ('l3', np.int_), 
+                   ('rand', np.float_)]
         )
-        indices = np.argsort(lengths, order=('l', 'rand'))
+        indices = np.argsort(lengths, order=('l1', 'rand'))
         batches = [indices[i:i + self.batch_size]
                    for i in range(0, len(indices), self.batch_size)]
         if self.shuffle:
@@ -454,11 +456,11 @@ drug_mol2vec_1.0_p3.pkl
 if __name__ == '__main__':
 
     # Dataset configuration 
-    drug_id_path = './data/drug/drug_info_1.0.csv'
+    drug_id_path = './data/drug/drug_info_1.0_inchi.csv'
     drug_sub_path = ['./data/drug/drug_fingerprint_2.0_p2.pkl',
                      './data/drug/drug_mol2vec_2.0_p2.pkl']
-    drug_pair_path = './data/drug/drug_cscore_pair_0.3.csv'
-    save_preprocess = False
+    drug_pair_path = './data/drug/drug_cscore_pair_0.1.csv'
+    save_preprocess = True
     save_path = './data/drug/drug(tmp).pkl'
     load_path = './data/drug/drug(v0.3).pkl'
 
@@ -472,7 +474,7 @@ if __name__ == '__main__':
         dataset = pickle.load(open(load_path, 'rb'))
    
     # Loader testing
-    dataset.set_rep(rep_idx=0)
+    dataset.set_rep(rep_idx=1)
 
     for idx, (d1, d1_r, d1_l, d2, d2_r, d2_l, score) in enumerate(
             dataset.get_dataloader(batch_size=1600, s_idx=1)[1]):
