@@ -18,13 +18,15 @@ LOGGER = logging.getLogger(__name__)
 class DrugModel(nn.Module):
     def __init__(self, input_dim, output_dim, hidden_dim, drug_embed_dim,
             lstm_layer, lstm_dropout, bi_lstm, linear_dropout, char_vocab_size,
-            char_embed_dim, dist_fn, learning_rate, binary, is_mlp):
+            char_embed_dim, char_dropout, dist_fn, learning_rate,
+            binary, is_mlp):
 
         super(DrugModel, self).__init__()
 
         # Save model configs
         self.drug_embed_dim = drug_embed_dim
         self.lstm_layer = lstm_layer
+        self.char_dropout = char_dropout
         self.dist_fn = dist_fn
         self.binary = binary
         self.is_mlp = is_mlp
@@ -46,12 +48,13 @@ class DrugModel(nn.Module):
 
         self.dist_fc = nn.Sequential(
             nn.Dropout(linear_dropout),
-            nn.Linear(drug_embed_dim * 2, 1)
+            nn.Linear(drug_embed_dim * 6, 1)
         )
 
         # Get params and register optimizer
         info, params = self.get_model_params()
         self.optimizer = optim.Adam(params, lr=learning_rate)
+        # self.optimizer = optim.Adamax(params)
         if binary:
             self.criterion = nn.BCELoss()
         else:
@@ -69,29 +72,36 @@ class DrugModel(nn.Module):
 
         # Character embedding
         c_embed = self.char_embed(inputs)
-
-        '''
-        # Sort c_embed
-        _, sort_idx = torch.sort(length, dim=0, descending=True)
-        _, unsort_idx = torch.sort(sort_idx, dim=0)
-        maxlen = torch.max(length)
-
-        # Pack padded sequence
-        c_embed = c_embed.index_select(0, Variable(sort_idx).cuda())
-        sorted_len = length.index_select(0, sort_idx).tolist()
-        c_packed = pack_padded_sequence(c_embed, sorted_len, batch_first=True) 
-        '''
-        c_packed = c_embed
+        # c_embed = F.dropout(c_embed, self.char_dropout)
         maxlen = inputs.size(1)
+
+        if not self.training:
+            # Sort c_embed
+            _, sort_idx = torch.sort(length, dim=0, descending=True)
+            _, unsort_idx = torch.sort(sort_idx, dim=0)
+            maxlen = torch.max(length)
+
+            # Pack padded sequence
+            c_embed = c_embed.index_select(0, Variable(sort_idx).cuda())
+            sorted_len = length.index_select(0, sort_idx).tolist()
+            c_packed = pack_padded_sequence(c_embed, sorted_len, batch_first=True) 
+
+        else:
+            c_packed = c_embed
+
 
         # Run LSTM
         init_lstm_h = self.init_lstm_h(inputs.size(0))
-        lstm_out, _ = self.lstm(c_packed, init_lstm_h)
+        lstm_out, states = self.lstm(c_packed, init_lstm_h)
 
-        '''
-        # Pad packed sequence
-        c_pad, _ = pad_packed_sequence(lstm_out, batch_first=True)
-        lstm_out = c_pad.index_select(0, Variable(unsort_idx).cuda())
+        hidden = torch.transpose(states[0], 0, 1).contiguous().view(
+                                 -1, 6 * self.drug_embed_dim)
+        if not self.training:
+            # Unsort hidden states
+            outputs = hidden.index_select(0, Variable(unsort_idx).cuda())
+        else:
+            outputs = hidden
+        
         '''
         lstm_out = lstm_out.contiguous().view(-1, self.drug_embed_dim * 2)
 
@@ -106,6 +116,7 @@ class DrugModel(nn.Module):
 
         # Concat fw, bw states
         outputs = torch.cat([fw_states, bw_states], dim=1)
+        '''
 
         return outputs
     

@@ -88,15 +88,16 @@ argparser.add_argument('--grad-clip', type=int, default=10)
 argparser.add_argument('--binary', type='bool', default=True)
 argparser.add_argument('--hidden-dim', type=int, default=200)
 argparser.add_argument('--drug-embed-dim', type=int, default=64)
-argparser.add_argument('--lstm-layer', type=int, default=1)
-argparser.add_argument('--lstm-dr', type=float, default=0.0)
+argparser.add_argument('--lstm-layer', type=int, default=3)
+argparser.add_argument('--lstm-dr', type=float, default=0.2)
+argparser.add_argument('--char-dr', type=float, default=0.0)
 argparser.add_argument('--bi-lstm', type='bool', default=True)
-argparser.add_argument('--linear-dr', type=float, default=0.0)
-argparser.add_argument('--char-embed-dim', type=int, default=20)
+argparser.add_argument('--linear-dr', type=float, default=0.5)
+argparser.add_argument('--char-embed-dim', type=int, default=30)
 argparser.add_argument('--s-idx', type=int, default=1)
 argparser.add_argument('--rep-idx', type=int, default=0)
 argparser.add_argument('--dist-fn', type=str, default='l2')
-argparser.add_argument('--seed', type=int, default=3)
+argparser.add_argument('--seed', type=int, default=None)
 
 args = argparser.parse_args()
 
@@ -193,6 +194,7 @@ def get_model(args, dataset):
                       linear_dropout=args.linear_dr,
                       char_vocab_size=len(dataset.char2idx),
                       char_embed_dim=args.char_embed_dim,
+                      char_dropout=args.char_dr,
                       dist_fn=args.dist_fn,
                       learning_rate=args.learning_rate,
                       binary=args.binary,
@@ -217,7 +219,7 @@ def init_logging(args):
 
 def init_seed(seed=None):
     if seed is None:
-        seed = int(get_ms() // 1000)
+        seed = int(round(time.time() * 1000)) % 10000
 
     LOGGER.info("Using seed={}, pid={}".format(seed, os.getpid()))
     np.random.seed(seed)
