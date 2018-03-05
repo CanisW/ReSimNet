@@ -57,6 +57,7 @@ def run_drug(model, loader, dataset, args, metric, train=False):
         tmp_pred = outputs.data.cpu().numpy()
         if args.binary:
             tmp_pred = np.array([float(p > 0.5) for p in tmp_pred[:]])
+            # pass
 
         # Accumulate for final evaluation
         tar_set += list(tmp_tar[:])
@@ -80,6 +81,13 @@ def run_drug(model, loader, dataset, args, metric, train=False):
             f1_kk = f1_kk[0][1]
             f1_ku = f1_ku[0][1]
             f1_uu = f1_uu[0][1]
+        else: # For binary classification, report f1
+            _, _, f1, _ = f1
+            _, _, f1_kk, _ = f1_kk
+            _, _, f1_ku, _ = f1_ku
+            _, _, f1_uu, _ = f1_uu
+        '''
+        '''
 
         # Optimize model
         if train and not args.save_embed:
@@ -102,46 +110,62 @@ def run_drug(model, loader, dataset, args, metric, train=False):
                 '{:2d}:{:2d}:{:2d}'.format(
                 et//3600, et%3600//60, et%60))
             LOGGER.info(_progress)
+            '''
+            '''
 
     # Sort by tar_set and gather top, lower 10%
     def sort_and_slice(list1, list2):
         list2, list1 = (list(t) for t in zip(*sorted(
                         zip(list2, list1), reverse=True)))
-        list1 = list1[:len(list1)//100] + list1[-len(list1)//100:]
+        list1 = list1[:len(list1)//100] # + list1[-len(list1)//100:]
         # list1 = list1[-len(list1)//100:]
-        list2 = list2[:len(list2)//100] + list2[-len(list2)//100:]
+        list2 = list2[:len(list2)//100] # + list2[-len(list2)//100:]
         # list2 = list2[-len(list2)//100:]
         return list1, list2
 
     if args.top_only:
         tar_set, pred_set = sort_and_slice(tar_set, pred_set)
-        print(tar_set[:10], pred_set[:10])
+        top_k = 50
+        print(tar_set[:top_k], pred_set[:top_k])
         kk_tar_set, kk_pred_set = sort_and_slice(kk_tar_set, kk_pred_set)
-        print(kk_tar_set[:10], kk_pred_set[:10])
+        print(kk_tar_set[:top_k], kk_pred_set[:top_k])
         ku_tar_set, ku_pred_set = sort_and_slice(ku_tar_set, ku_pred_set)
-        print(ku_tar_set[:10], ku_pred_set[:10])
+        print(ku_tar_set[:top_k], ku_pred_set[:top_k])
         uu_tar_set, uu_pred_set = sort_and_slice(uu_tar_set, uu_pred_set)
-        print(uu_tar_set[:10], uu_pred_set[:10])
+        print(uu_tar_set[:top_k], uu_pred_set[:top_k])
 
+    '''
+    '''
     # Calculate acuumulated f1 scores
     f1 = metric(tar_set, pred_set)
     f1_kk = metric(kk_tar_set, kk_pred_set)
     f1_ku = metric(ku_tar_set, ku_pred_set)
     f1_uu = metric(uu_tar_set, uu_pred_set)
+
+    # Trun into correlation
     if not args.binary:
         f1 = f1[0][1]
         f1_kk = f1_kk[0][1]
         f1_ku = f1_ku[0][1]
         f1_uu = f1_uu[0][1]
+    else:
+        pr, rc, f1, _ = f1
+        pr_kk, rc_kk, f1_kk, _ = f1_kk
+        pr_ku, rc_ku, f1_ku, _ = f1_ku
+        pr_uu, rc_uu, f1_uu, _ = f1_uu
 
     # TODO add spearman correlation
 
     # End of an epoch
     et = (datetime.now() - start_time).total_seconds()
-    LOGGER.info('Results (Loss/F1/KK/KU/UU): {:.3f}\t{:.3f}\t'.format(
-        sum(stats['loss'])/len(stats['loss']), f1) +
-        '{:.3f}\t{:.3f}\t{:.3f}'.format(
-        f1_kk, f1_ku, f1_uu))
+    LOGGER.info('Results (Loss/F1/KK/KU/UU): {:.3f}\t'.format(
+        sum(stats['loss'])/len(stats['loss'])) +
+        '[{:.3f}\t{:.3f}\t{:.3f}]\t[{:.3f}\t{:.3f}\t{:.3f}]\t'.format(
+        pr, rc, f1, pr_kk, rc_kk, f1_kk) +
+        '[{:.3f}\t{:.3f}\t{:.3f}]\t[{:.3f}\t{:.3f}\t{:.3f}]\t'.format(
+        pr_ku, rc_ku, f1_ku, pr_uu, rc_uu, f1_uu) +
+        'count: {}/{}/{}/{}'.format(
+        len(pred_set), len(kk_pred_set), len(ku_pred_set), len(uu_pred_set)))
 
     return f1_ku
 
@@ -246,16 +270,16 @@ def save_pair_score(model, pair_dir, dataset, args):
 
                 # Ready for reader and writer
                 csv_reader = csv.reader(f)
-                csv_writer = csv.writer(open(args.checkpoint_dir + 'pairs/' +
+                csv_writer = csv.writer(open('/Data/drugs/results/final/' +
                                              file_ + '.' + args.model_name + 
-                                             '.pred', 'w'))
-                csv_writer.writerow(['pert1', 'pert1_known', 
-                                     'pert2', 'pert2_known',
-                                     'prediction'])
+                                             '.csv', 'w'))
+                csv_writer.writerow(['prediction'])
+                '''
                 # For stats
                 stats = {'kk': 0, 'ku': 0, 'uu': 0}
-                batch = []
                 kk_info = []
+                '''
+                batch = []
 
                 # Iterate reader
                 for row_idx, row in enumerate(csv_reader):
@@ -263,30 +287,34 @@ def save_pair_score(model, pair_dir, dataset, args):
                         # print(row)
                         continue
 
-                    # Assume each representation is smiles.
-                    assert args.rep_idx == 0
+                    # Check representations.
+                    # assert args.rep_idx == 2
                     rep1, rep2 = row
+                    rep1 = [float(value) for value in list(rep1)]
+                    rep2 = [float(value) for value in list(rep2)]
 
+                    '''
                     # Check if drug is known
                     rep1_k = next((reps for _, reps in dataset.drugs.items()
-                                  if reps[0] == rep1), None) != None
+                                  if reps[args.rep_idx] == rep1), None) != None
                     rep2_k = next((reps for _, reps in dataset.drugs.items()
-                                  if reps[0] == rep2), None) != None
+                                  if reps[args.rep_idx] == rep2), None) != None
                     if rep1_k and rep2_k:
                         stats['kk'] += 1
                     elif rep1_k != rep2_k:
                         stats['ku'] += 1
                     else:
                         stats['uu'] += 1
+                    '''
 
                     # Gather examples
                     example = ['pert1', rep1, len(rep1), 
                                'pert2', rep2, len(rep2), 0]
                     batch.append(example)
-                    kk_info.append([rep1_k, rep2_k])
+                    # kk_info.append([rep1_k, rep2_k])
 
                     # Run model for each batch
-                    if len(batch) == 128:
+                    if len(batch) == 1024:
                         inputs = dataset.collate_fn(batch)
 
                         # Run model
@@ -294,12 +322,13 @@ def save_pair_score(model, pair_dir, dataset, args):
                                              inputs[4].cuda(), inputs[5])
                         pred = output.data.tolist()
                     
-                        assert len(batch) == len(kk_info) == len(pred)
-                        for ex, is_kk, p in zip(batch, kk_info, pred):
-                            csv_writer.writerow([ex[1], is_kk[0], 
-                                                 ex[4], is_kk[1], p])
+                        assert len(batch) == len(pred)
+                        for ex, p in zip(batch, pred):
+                            # r1 = ''.join([str(int(val)) for val in ex[1]])
+                            # r2 = ''.join([str(int(val)) for val in ex[4]])
+                            csv_writer.writerow([p])
                         batch = []
-                        kk_info = []
+                        # kk_info = []
 
                 # Remaining batches
                 if len(batch) > 0:
@@ -307,9 +336,11 @@ def save_pair_score(model, pair_dir, dataset, args):
                     output, _, _ = model(inputs[1].cuda(), inputs[2],
                                          inputs[4].cuda(), inputs[5])
                     pred = output.data.tolist()
-                    assert len(batch) == len(kk_info) == len(pred)
-                    for ex, is_kk, p in zip(batch, kk_info, pred):
-                        csv_writer.writerow([ex[1], is_kk[0], 
-                                             ex[4], is_kk[1], p])
+                    assert len(batch) == len(pred)
+                    for ex, p in zip(batch, pred):
+                        # r1 = ''.join([str(int(val)) for val in ex[1]])
+                        # r2 = ''.join([str(int(val)) for val in ex[4]])
+                        csv_writer.writerow([p])
+                    batch = []
 
-                LOGGER.info('kk/ku/uu stats: {}..'.format(sorted(stats.items())))
+                # LOGGER.info('kk/ku/uu stats: {}..'.format(sorted(stats.items())))

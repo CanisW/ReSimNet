@@ -31,8 +31,8 @@ class DrugDataset(object):
         self.drugs = {}
         self.pairs = []
         self.dataset = {'tr': [], 'va': [], 'te': []}
-        self.SR = [0.7, 0.1, 0.2] # split ratio
-        self.UR = 0.1 # Unknown ratio
+        self.SR = [0.4, 0.2, 0.4] # split ratio
+        self.UR = 0.3 # Unknown ratio
         self.input_maxlen = 0
 
         # Drug dictionaries
@@ -62,9 +62,9 @@ class DrugDataset(object):
 
     def process_drug_id(self, path):
         print('### Drug ID processing {}'.format(path))
-        PERT_IDX = 0
-        SMILES_IDX = 3
-        INCHIKEY_IDX = -1
+        PERT_IDX = 1
+        SMILES_IDX = 4
+        INCHIKEY_IDX = 5
         drugs = {}
         self.register_ichar(self.PAD)
         self.register_ichar(self.UNK)
@@ -456,13 +456,13 @@ drug_mol2vec_1.0_p3.pkl
 if __name__ == '__main__':
 
     # Dataset configuration 
-    drug_id_path = './data/drug/drug_info_1.0_inchi.csv'
+    drug_id_path = './data/drug/drug_info_2.0.csv'
     drug_sub_path = ['./data/drug/drug_fingerprint_2.0_p2.pkl',
                      './data/drug/drug_mol2vec_2.0_p2.pkl']
     drug_pair_path = './data/drug/drug_cscore_pair_0.1.csv'
     save_preprocess = True
     save_path = './data/drug/drug(tmp).pkl'
-    load_path = './data/drug/drug(v0.3).pkl'
+    load_path = './data/drug/drug(v0.1_info2.0).pkl'
 
     # Save or load dataset
     if save_preprocess:
@@ -474,7 +474,7 @@ if __name__ == '__main__':
         dataset = pickle.load(open(load_path, 'rb'))
    
     # Loader testing
-    dataset.set_rep(rep_idx=1)
+    dataset.set_rep(rep_idx=0)
 
     for idx, (d1, d1_r, d1_l, d2, d2_r, d2_l, score) in enumerate(
             dataset.get_dataloader(batch_size=1600, s_idx=1)[1]):

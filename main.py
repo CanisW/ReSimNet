@@ -11,25 +11,25 @@ import torch.optim as optim
 import torch.nn.functional as F
 
 from datetime import datetime
+from functools import partial
 from torch.autograd import Variable
 
 from tasks.drug_task import DrugDataset
 from tasks.drug_run import *
 from models.drug_model import DrugModel
-
 from models.root.utils import *
 
 
 LOGGER = logging.getLogger()
 
-DATA_PATH = './tasks/data/drug/drug(v0.1_inchi).pkl'  # For training (Pair scores)
+DATA_PATH = './tasks/data/drug/drug(v0.1).pkl'  # For training (Pair scores)
 DRUG_DIR = './tasks/data/drug/validation/'      # For validation (ex: tox21)
 DRUG_FILES = ['BBBP_fingerprint_3.pkl',
               'clintox_fingerprint_3.pkl',
               'sider_fingerprint_3.pkl',
               'tox21_fingerprint_3.pkl',
               'toxcast_fingerprint_3.pkl',]
-PAIR_DIR = './tasks/data/drug/ki_zinc_pair/'    # New pair data for scoring
+PAIR_DIR = '/Data/drugs/ki_ki_pair_final/'  # New pair data for scoring
 CKPT_DIR = './results/'
 MODEL_NAME = 'test.mdl'
 
@@ -86,18 +86,18 @@ argparser.add_argument('--grad-clip', type=int, default=10)
 
 # Model config
 argparser.add_argument('--binary', type='bool', default=True)
-argparser.add_argument('--hidden-dim', type=int, default=200)
-argparser.add_argument('--drug-embed-dim', type=int, default=80)
+argparser.add_argument('--hidden-dim', type=int, default=100)
+argparser.add_argument('--drug-embed-dim', type=int, default=300)
 argparser.add_argument('--lstm-layer', type=int, default=1)
-argparser.add_argument('--lstm-dr', type=float, default=0.2)
+argparser.add_argument('--lstm-dr', type=float, default=0.0)
 argparser.add_argument('--char-dr', type=float, default=0.0)
 argparser.add_argument('--bi-lstm', type='bool', default=True)
-argparser.add_argument('--linear-dr', type=float, default=0.5)
-argparser.add_argument('--char-embed-dim', type=int, default=30)
+argparser.add_argument('--linear-dr', type=float, default=0.0)
+argparser.add_argument('--char-embed-dim', type=int, default=20)
 argparser.add_argument('--s-idx', type=int, default=1)
 argparser.add_argument('--rep-idx', type=int, default=0)
 argparser.add_argument('--dist-fn', type=str, default='l2')
-argparser.add_argument('--seed', type=int, default=None)
+argparser.add_argument('--seed', type=int, default=2018)
 
 args = argparser.parse_args()
 
@@ -115,8 +115,8 @@ def run_experiment(model, dataset, run_fn, args):
 
     # Set metrics
     if args.binary:
-        from sklearn.metrics import f1_score
-        metric = f1_score
+        from sklearn.metrics import precision_recall_fscore_support
+        metric = partial(precision_recall_fscore_support, average='binary')
         assert args.s_idx == 1
     else:
         metric = np.corrcoef
@@ -151,6 +151,7 @@ def run_experiment(model, dataset, run_fn, args):
             model.load_checkpoint(args.checkpoint_dir, args.model_name)
 
         best = 0.0
+        converge_cnt = 0
         for ep in range(args.epoch):
             LOGGER.info('Training Epoch %d' % (ep+1))
             run_fn(model, train_loader, dataset, args, metric, train=True)
@@ -165,6 +166,12 @@ def run_experiment(model, dataset, run_fn, args):
                         'state_dict': model.state_dict(),
                         'optimizer': model.optimizer.state_dict()},
                         args.checkpoint_dir, args.model_name)
+                    converge_cnt = 0
+                else:
+                    converge_cnt += 1
+                
+                if converge_cnt >= 3:
+                    break
     
     if args.test:
         LOGGER.info('Load Validation/Testing')

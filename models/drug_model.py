@@ -36,24 +36,29 @@ class DrugModel(nn.Module):
             self.char_embed = nn.Embedding(char_vocab_size, char_embed_dim, 
                                            padding_idx=0)
             self.lstm = nn.LSTM(char_embed_dim, drug_embed_dim, lstm_layer,
-                                bidirectional=bi_lstm,
+                                bidirectional=False,
                                 batch_first=True, dropout=lstm_dropout)
         # For rep_ix 2, 3
         else:
             self.fc1 = nn.Sequential(
                 nn.Linear(input_dim, hidden_dim),
                 nn.Sigmoid(),
-                nn.Linear(hidden_dim, drug_embed_dim * 2)
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.Sigmoid(),
+                nn.Linear(hidden_dim, drug_embed_dim * 1)
             )
+            self.init_layers()
 
         self.dist_fc = nn.Sequential(
             nn.Dropout(linear_dropout),
-            nn.Linear(drug_embed_dim * 2, 1)
+            nn.Linear(drug_embed_dim * 1, 1),
+            # nn.ReLU(),
+            # nn.Linear(hidden_dim, 1)
         )
 
         # Get params and register optimizer
         info, params = self.get_model_params()
-        self.optimizer = optim.Adam(params, lr=learning_rate)
+        self.optimizer = optim.Adam(params, lr=learning_rate, weight_decay=0)
         # self.optimizer = optim.Adamax(params)
         if binary:
             self.criterion = nn.BCELoss()
@@ -63,9 +68,14 @@ class DrugModel(nn.Module):
 
     def init_lstm_h(self, batch_size):
         return (Variable(torch.zeros(
-            	self.lstm_layer*2, batch_size, self.drug_embed_dim)).cuda(),
+            	self.lstm_layer*1, batch_size, self.drug_embed_dim)).cuda(),
                 Variable(torch.zeros(
-            	self.lstm_layer*2, batch_size, self.drug_embed_dim)).cuda())
+            	self.lstm_layer*1, batch_size, self.drug_embed_dim)).cuda())
+
+    def init_layers(self):
+        nn.init.xavier_normal(self.fc1[0].weight.data)
+        nn.init.xavier_normal(self.fc1[2].weight.data)
+        nn.init.xavier_normal(self.fc1[4].weight.data)
 
     # Set Siamese network as basic LSTM
     def siamese_sequence(self, inputs, length):
@@ -95,7 +105,7 @@ class DrugModel(nn.Module):
         lstm_out, states = self.lstm(c_packed, init_lstm_h)
 
         hidden = torch.transpose(states[0], 0, 1).contiguous().view(
-                                 -1, 2 * self.drug_embed_dim)
+                                 -1, 1 * self.drug_embed_dim)
         if not self.training:
             # Unsort hidden states
             outputs = hidden.index_select(0, Variable(unsort_idx).cuda())
