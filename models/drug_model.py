@@ -42,9 +42,10 @@ class DrugModel(nn.Module):
         else:
             self.fc1 = nn.Sequential(
                 nn.Linear(input_dim, hidden_dim),
-                nn.Sigmoid(),
-                nn.Linear(hidden_dim, hidden_dim),
-                nn.Sigmoid(),
+                # nn.Sigmoid(),
+                nn.ReLU(),
+                # nn.Linear(hidden_dim, hidden_dim),
+                # nn.Sigmoid(),
                 nn.Linear(hidden_dim, drug_embed_dim * 1)
             )
             self.init_layers()
@@ -75,7 +76,7 @@ class DrugModel(nn.Module):
     def init_layers(self):
         nn.init.xavier_normal(self.fc1[0].weight.data)
         nn.init.xavier_normal(self.fc1[2].weight.data)
-        nn.init.xavier_normal(self.fc1[4].weight.data)
+        # nn.init.xavier_normal(self.fc1[4].weight.data)
 
     # Set Siamese network as basic LSTM
     def siamese_sequence(self, inputs, length):
