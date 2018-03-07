@@ -59,6 +59,8 @@ argparser.add_argument('--print-step', type=float, default=100,
                        help='Display steps')
 argparser.add_argument('--train', type='bool', default=True,
                        help='Enable training')
+argparser.add_argument('--pretrain', type='bool', default=False,
+                       help='Enable training')
 argparser.add_argument('--valid', type='bool', default=True,
                        help='Enable validation')
 argparser.add_argument('--test', type='bool', default=True,
@@ -149,6 +151,11 @@ def run_experiment(model, dataset, run_fn, args):
     if args.train:
         if args.resume:
             model.load_checkpoint(args.checkpoint_dir, args.model_name)
+        
+        if args.pretrain:
+            for k in range(3):
+                LOGGER.info('Pretraining layer %d' % (k+1))
+                run_fn(model, train_loader, dataset, args, metric, True, k)
 
         best = 0.0
         converge_cnt = 0

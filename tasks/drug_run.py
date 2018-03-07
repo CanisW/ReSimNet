@@ -145,7 +145,7 @@ def run_bi(model, loader, dataset, args, metric, train=False):
     return f1_ku
 
 
-def run_reg(model, loader, dataset, args, metric, train=False):
+def run_reg(model, loader, dataset, args, metric, train=False, layer_num=None):
     total_step = 0.0
     stats = {'loss':[]}
     tar_set = []
@@ -175,8 +175,12 @@ def run_reg(model, loader, dataset, args, metric, train=False):
         else: model.eval()
 
         # Get outputs
-        outputs, embed1, embed2 = model(d1_r.cuda(), d1_l, d2_r.cuda(), d2_l)
-        loss = model.get_loss(outputs, score.cuda())
+        outputs, embed1, embed2, ploss = model(d1_r.cuda(), d1_l, 
+                                               d2_r.cuda(), d2_l, layer_num)
+        if ploss is not None:
+            loss = ploss
+        else:
+            loss = model.get_loss(outputs, score.cuda())
         stats['loss'] += [loss.data[0]]
         total_step += 1.0
 

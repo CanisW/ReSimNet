@@ -40,15 +40,22 @@ class DrugModel(nn.Module):
                                 batch_first=True, dropout=lstm_dropout)
         # For rep_ix 2, 3
         else:
-            self.fc1 = nn.Sequential(
+            self.encoder = nn.Sequential(
                 nn.Linear(input_dim, hidden_dim),
                 # nn.Sigmoid(),
                 nn.ReLU(),
-                # nn.Linear(hidden_dim, hidden_dim),
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.ReLU(),
                 # nn.Sigmoid(),
-                nn.Linear(hidden_dim, drug_embed_dim * 1)
+                nn.Linear(hidden_dim, drug_embed_dim)
             )
-            self.init_layers()
+            # Decoder is used for pretraining
+            self.decoder = nn.Sequential(
+                nn.Linear(hidden_dim, input_dim),
+                nn.Linear(hidden_dim, hidden_dim),
+                nn.Linear(drug_embed_dim, hidden_dim)
+            )
+            # self.init_layers()
 
         # Get params and register optimizer
         info, params = self.get_model_params()
@@ -67,9 +74,32 @@ class DrugModel(nn.Module):
             	self.lstm_layer*1, batch_size, self.drug_embed_dim)).cuda())
 
     def init_layers(self):
-        nn.init.xavier_normal(self.fc1[0].weight.data)
-        nn.init.xavier_normal(self.fc1[2].weight.data)
-        # nn.init.xavier_normal(self.fc1[4].weight.data)
+        nn.init.xavier_normal(self.encoder[0].weight.data)
+        nn.init.xavier_normal(self.encoder[2].weight.data)
+        nn.init.xavier_normal(self.encoder[4].weight.data)
+
+    def pretrain_siamese(self, inputs, layer_num):
+        inputs = inputs.float()
+        
+        # First layer
+        hidden1 = self.encoder[1](self.encoder[0](inputs))
+        recon1 = self.decoder[0](hidden1)
+        if layer_num == 0:
+            return self.criterion(recon1, inputs)
+
+        # Second layer
+        hidden1 = hidden1.clone().detach()
+        hidden2 = self.encoder[3](self.encoder[2](hidden1))
+        recon2 = self.decoder[1](hidden2)
+        if layer_num == 1:
+            return self.criterion(recon2, hidden1)
+
+        # Third layer
+        hidden2 = hidden2.clone().detach()
+        hidden3 = self.encoder[4](hidden2)
+        recon3 = self.decoder[2](hidden3)
+        if layer_num == 2:
+            return self.criterion(recon3, hidden2)
 
     # Set Siamese network as basic LSTM
     def siamese_sequence(self, inputs, length):
@@ -107,7 +137,7 @@ class DrugModel(nn.Module):
         return outputs
     
     def siamese_basic(self, inputs):
-        return self.fc1(inputs.float())
+        return self.encoder(inputs.float())
     
     def distance_layer(self, vec1, vec2, distance='l1'):
         if self.binary:
@@ -125,7 +155,13 @@ class DrugModel(nn.Module):
 
         return similarity
 
-    def forward(self, key1, key1_len, key2, key2_len):
+    def forward(self, key1, key1_len, key2, key2_len, layer_num):
+        if layer_num is not None:
+            pretrain_loss = (self.pretrain_siamese(key1, layer_num) + 
+                             self.pretrain_siamese(key2, layer_num))
+        else:
+            pretrain_loss = None
+
         if not self.is_mlp:
             embed1 = self.siamese_sequence(key1, key1_len) 
             embed2 = self.siamese_sequence(key2, key2_len)
@@ -134,7 +170,7 @@ class DrugModel(nn.Module):
             embed2 = self.siamese_basic(key2)
 
         similarity = self.distance_layer(embed1, embed2, self.dist_fn)
-        return similarity, embed1, embed2
+        return similarity, embed1, embed2, pretrain_loss
     
     def get_loss(self, outputs, targets):
         loss = self.criterion(outputs, targets)
