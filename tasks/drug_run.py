@@ -17,7 +17,7 @@ from models.root.utils import *
 LOGGER = logging.getLogger(__name__)
 
 
-def run_drug(model, loader, dataset, args, metric, train=False):
+def run_bi(model, loader, dataset, args, metric, train=False):
     total_step = 0.0
     stats = {'loss':[]}
     tar_set = []
@@ -55,9 +55,7 @@ def run_drug(model, loader, dataset, args, metric, train=False):
         # Metrics for binary classification
         tmp_tar = score.data.cpu().numpy()
         tmp_pred = outputs.data.cpu().numpy()
-        if args.binary:
-            tmp_pred = np.array([float(p > 0.5) for p in tmp_pred[:]])
-            # pass
+        tmp_pred = np.array([float(p > 0.5) for p in tmp_pred[:]])
 
         # Accumulate for final evaluation
         tar_set += list(tmp_tar[:])
@@ -75,28 +73,17 @@ def run_drug(model, loader, dataset, args, metric, train=False):
         f1_ku = metric(list(tmp_tar[ku_idx]), list(tmp_pred[ku_idx]))
         f1_uu = metric(list(tmp_tar[uu_idx]), list(tmp_pred[uu_idx]))
 
-        # for regression
-        if not args.binary:
-            f1 = f1[0][1]
-            f1_kk = f1_kk[0][1]
-            f1_ku = f1_ku[0][1]
-            f1_uu = f1_uu[0][1]
-        else: # For binary classification, report f1
-            _, _, f1, _ = f1
-            _, _, f1_kk, _ = f1_kk
-            _, _, f1_ku, _ = f1_ku
-            _, _, f1_uu, _ = f1_uu
-        '''
-        '''
+        # For binary classification, report f1
+        _, _, f1, _ = f1
+        _, _, f1_kk, _ = f1_kk
+        _, _, f1_ku, _ = f1_ku
+        _, _, f1_uu, _ = f1_uu
 
         # Optimize model
         if train and not args.save_embed:
             loss.backward()
             nn.utils.clip_grad_norm(model.get_model_params()[1], 
                     args.grad_max_norm)
-            # for p in model.get_model_params()[1]:
-            #     if p.grad is not None:
-            #         p.grad.data.clamp_(-args.grad_clip, args.grad_clip)
             model.optimizer.step()
         
         # Print for print step or at last
@@ -110,8 +97,6 @@ def run_drug(model, loader, dataset, args, metric, train=False):
                 '{:2d}:{:2d}:{:2d}'.format(
                 et//3600, et%3600//60, et%60))
             LOGGER.info(_progress)
-            '''
-            '''
 
     # Sort by tar_set and gather top, lower 10%
     def sort_and_slice(list1, list2):
@@ -134,25 +119,15 @@ def run_drug(model, loader, dataset, args, metric, train=False):
         uu_tar_set, uu_pred_set = sort_and_slice(uu_tar_set, uu_pred_set)
         print(uu_tar_set[:top_k], uu_pred_set[:top_k])
 
-    '''
-    '''
     # Calculate acuumulated f1 scores
     f1 = metric(tar_set, pred_set)
     f1_kk = metric(kk_tar_set, kk_pred_set)
     f1_ku = metric(ku_tar_set, ku_pred_set)
     f1_uu = metric(uu_tar_set, uu_pred_set)
-
-    # Trun into correlation
-    if not args.binary:
-        f1 = f1[0][1]
-        f1_kk = f1_kk[0][1]
-        f1_ku = f1_ku[0][1]
-        f1_uu = f1_uu[0][1]
-    else:
-        pr, rc, f1, _ = f1
-        pr_kk, rc_kk, f1_kk, _ = f1_kk
-        pr_ku, rc_ku, f1_ku, _ = f1_ku
-        pr_uu, rc_uu, f1_uu, _ = f1_uu
+    pr, rc, f1, _ = f1
+    pr_kk, rc_kk, f1_kk, _ = f1_kk
+    pr_ku, rc_ku, f1_ku, _ = f1_ku
+    pr_uu, rc_uu, f1_uu, _ = f1_uu
 
     # TODO add spearman correlation
 
@@ -164,6 +139,131 @@ def run_drug(model, loader, dataset, args, metric, train=False):
         pr, rc, f1, pr_kk, rc_kk, f1_kk) +
         '[{:.3f}\t{:.3f}\t{:.3f}]\t[{:.3f}\t{:.3f}\t{:.3f}]\t'.format(
         pr_ku, rc_ku, f1_ku, pr_uu, rc_uu, f1_uu) +
+        'count: {}/{}/{}/{}'.format(
+        len(pred_set), len(kk_pred_set), len(ku_pred_set), len(uu_pred_set)))
+
+    return f1_ku
+
+
+def run_reg(model, loader, dataset, args, metric, train=False):
+    total_step = 0.0
+    stats = {'loss':[]}
+    tar_set = []
+    pred_set = []
+    kk_tar_set = []
+    kk_pred_set = []
+    ku_tar_set = []
+    ku_pred_set = []
+    uu_tar_set = []
+    uu_pred_set = []
+    start_time = datetime.now()
+
+    for d_idx, (d1, d1_r, d1_l, d2, d2_r, d2_l, score) in enumerate(loader):
+
+        # Split for KK/KU/UU sets
+        kk_idx = np.argwhere([a in dataset.known and b in dataset.known
+                              for a, b in zip(d1, d2)]).flatten()
+        ku_idx = np.argwhere([(a in dataset.unknown) != (b in dataset.unknown)
+                              for a, b in zip(d1, d2)]).flatten()
+        uu_idx = np.argwhere([a in dataset.unknown and b in dataset.unknown
+                              for a, b in zip(d1, d2)]).flatten()
+        assert len(kk_idx) + len(ku_idx) + len(uu_idx) == len(d1)
+
+        # Grad zero + mode change
+        model.optimizer.zero_grad()
+        if train: model.train(train)
+        else: model.eval()
+
+        # Get outputs
+        outputs, embed1, embed2 = model(d1_r.cuda(), d1_l, d2_r.cuda(), d2_l)
+        loss = model.get_loss(outputs, score.cuda())
+        stats['loss'] += [loss.data[0]]
+        total_step += 1.0
+
+        # Metrics for regression
+        tmp_tar = score.data.cpu().numpy()
+        tmp_pred = outputs.data.cpu().numpy()
+
+        # Accumulate for final evaluation
+        tar_set += list(tmp_tar[:])
+        pred_set += list(tmp_pred[:])
+        kk_tar_set += list(tmp_tar[kk_idx])
+        kk_pred_set += list(tmp_pred[kk_idx])
+        ku_tar_set += list(tmp_tar[ku_idx])
+        ku_pred_set += list(tmp_pred[ku_idx])
+        uu_tar_set += list(tmp_tar[uu_idx])
+        uu_pred_set += list(tmp_pred[uu_idx])
+    
+        # Calculate current f1 scores
+        f1 = metric(list(tmp_tar[:]), list(tmp_pred[:]))
+        f1_kk = metric(list(tmp_tar[kk_idx]), list(tmp_pred[kk_idx]))
+        f1_ku = metric(list(tmp_tar[ku_idx]), list(tmp_pred[ku_idx]))
+        f1_uu = metric(list(tmp_tar[uu_idx]), list(tmp_pred[uu_idx]))
+        f1 = f1[0][1]
+        f1_kk = f1_kk[0][1]
+        f1_ku = f1_ku[0][1]
+        f1_uu = f1_uu[0][1]
+
+        # Optimize model
+        if train and not args.save_embed:
+            loss.backward()
+            nn.utils.clip_grad_norm(model.get_model_params()[1], 
+                    args.grad_max_norm)
+            model.optimizer.step()
+        
+        # Print for print step or at last
+        if d_idx % args.print_step == 0 or d_idx == (len(loader) - 1):
+            et = int((datetime.now() - start_time).total_seconds())
+            _progress = (
+                '{}/{} | Loss: {:.3f} | Total Corr: {:.3f} | '.format(
+                d_idx + 1, len(loader), loss.data[0], f1) +
+                'KK: {:.3f} KU: {:.3f} UU: {:.3f} | '.format(
+                f1_kk, f1_ku, f1_uu) +
+                '{:2d}:{:2d}:{:2d}'.format(
+                et//3600, et%3600//60, et%60))
+            LOGGER.info(_progress)
+
+    # Sort by tar_set and gather top, lower 10%
+    def sort_and_slice(list1, list2):
+        list2, list1 = (list(t) for t in zip(*sorted(
+                        zip(list2, list1), reverse=True)))
+        list1 = list1[:len(list1)//100] # + list1[-len(list1)//100:]
+        # list1 = list1[-len(list1)//100:]
+        list2 = list2[:len(list2)//100] # + list2[-len(list2)//100:]
+        # list2 = list2[-len(list2)//100:]
+        return list1, list2
+
+    if args.top_only:
+        tar_set, pred_set = sort_and_slice(tar_set, pred_set)
+        top_k = 50
+        print(tar_set[:top_k], pred_set[:top_k])
+        kk_tar_set, kk_pred_set = sort_and_slice(kk_tar_set, kk_pred_set)
+        print(kk_tar_set[:top_k], kk_pred_set[:top_k])
+        ku_tar_set, ku_pred_set = sort_and_slice(ku_tar_set, ku_pred_set)
+        print(ku_tar_set[:top_k], ku_pred_set[:top_k])
+        uu_tar_set, uu_pred_set = sort_and_slice(uu_tar_set, uu_pred_set)
+        print(uu_tar_set[:top_k], uu_pred_set[:top_k])
+
+    # Calculate acuumulated f1 scores
+    f1 = metric(tar_set, pred_set)
+    f1_kk = metric(kk_tar_set, kk_pred_set)
+    f1_ku = metric(ku_tar_set, ku_pred_set)
+    f1_uu = metric(uu_tar_set, uu_pred_set)
+
+    # Trun into correlation
+    f1 = f1[0][1]
+    f1_kk = f1_kk[0][1]
+    f1_ku = f1_ku[0][1]
+    f1_uu = f1_uu[0][1]
+
+    # TODO add spearman correlation
+
+    # End of an epoch
+    et = (datetime.now() - start_time).total_seconds()
+    LOGGER.info('Results (Loss/F1/KK/KU/UU): {:.3f}\t'.format(
+        sum(stats['loss'])/len(stats['loss'])) +
+        '[{:.3f}\t{:.3f}\t{:.3f}\t{:.3f}] '.format(
+        f1, f1_kk, f1_ku, f1_uu) +
         'count: {}/{}/{}/{}'.format(
         len(pred_set), len(kk_pred_set), len(ku_pred_set), len(uu_pred_set)))
 

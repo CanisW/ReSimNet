@@ -85,7 +85,7 @@ argparser.add_argument('--grad-max-norm', type=int, default=10)
 argparser.add_argument('--grad-clip', type=int, default=10)
 
 # Model config
-argparser.add_argument('--binary', type='bool', default=True)
+argparser.add_argument('--binary', type='bool', default=False)
 argparser.add_argument('--hidden-dim', type=int, default=100)
 argparser.add_argument('--drug-embed-dim', type=int, default=300)
 argparser.add_argument('--lstm-layer', type=int, default=1)
@@ -94,7 +94,7 @@ argparser.add_argument('--char-dr', type=float, default=0.0)
 argparser.add_argument('--bi-lstm', type='bool', default=True)
 argparser.add_argument('--linear-dr', type=float, default=0.0)
 argparser.add_argument('--char-embed-dim', type=int, default=20)
-argparser.add_argument('--s-idx', type=int, default=1)
+argparser.add_argument('--s-idx', type=int, default=0)
 argparser.add_argument('--rep-idx', type=int, default=0)
 argparser.add_argument('--dist-fn', type=str, default='l2')
 argparser.add_argument('--seed', type=int, default=2018)
@@ -186,7 +186,10 @@ def get_dataset(path):
 
 
 def get_run_fn(args):
-    return run_drug
+    if args.binary:
+        return run_bi
+    else:
+        return run_reg
 
 
 def get_model(args, dataset):

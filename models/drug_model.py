@@ -50,13 +50,6 @@ class DrugModel(nn.Module):
             )
             self.init_layers()
 
-        self.dist_fc = nn.Sequential(
-            nn.Dropout(linear_dropout),
-            nn.Linear(drug_embed_dim * 1, 1),
-            # nn.ReLU(),
-            # nn.Linear(hidden_dim, 1)
-        )
-
         # Get params and register optimizer
         info, params = self.get_model_params()
         self.optimizer = optim.Adam(params, lr=learning_rate, weight_decay=0)
@@ -80,7 +73,6 @@ class DrugModel(nn.Module):
 
     # Set Siamese network as basic LSTM
     def siamese_sequence(self, inputs, length):
-
         # Character embedding
         c_embed = self.char_embed(inputs)
         # c_embed = F.dropout(c_embed, self.char_dropout)
@@ -100,7 +92,6 @@ class DrugModel(nn.Module):
         else:
             c_packed = c_embed
 
-
         # Run LSTM
         init_lstm_h = self.init_lstm_h(inputs.size(0))
         lstm_out, states = self.lstm(c_packed, init_lstm_h)
@@ -113,29 +104,12 @@ class DrugModel(nn.Module):
         else:
             outputs = hidden
         
-        '''
-        lstm_out = lstm_out.contiguous().view(-1, self.drug_embed_dim * 2)
-
-        # Select length
-        fw_lens = (torch.arange(0, inputs.size(0)).long()
-                   * maxlen + length - 1).cuda()
-        bw_lens = (torch.arange(0, inputs.size(0)).long() * maxlen).cuda()
-        fw_selected = lstm_out[fw_lens,:]
-        fw_states = fw_selected[:,:self.drug_embed_dim]
-        bw_selected = lstm_out[bw_lens,:]
-        bw_states = bw_selected[:,self.drug_embed_dim:]
-
-        # Concat fw, bw states
-        outputs = torch.cat([fw_states, bw_states], dim=1)
-        '''
-
         return outputs
     
     def siamese_basic(self, inputs):
         return self.fc1(inputs.float())
     
     def distance_layer(self, vec1, vec2, distance='l1'):
-	# Use Sigmoid for binary classification, otherwise tanh for regression
         if self.binary:
             nonl = F.sigmoid
         else:
@@ -145,11 +119,9 @@ class DrugModel(nn.Module):
             similarity = nonl(F.cosine_similarity(
                     vec1 + 1e-16, vec2 + 1e-16, dim=-1))
         elif distance == 'l1':
-            similarity = nonl(self.dist_fc(torch.abs(vec1 - vec2)))
-            similarity = similarity.squeeze(1)
+            similarity = nonl(torch.sum(torch.abs(vec1 - vec2), dim=1))
         elif distance == 'l2':
-            similarity = nonl(self.dist_fc(torch.abs((vec1 - vec2) ** 2)))
-            similarity = similarity.squeeze(1)
+            similarity = nonl(torch.sum(torch.abs((vec1 - vec2) ** 2), dim=1))
 
         return similarity
 
