@@ -154,10 +154,12 @@ class DrugModel(nn.Module):
             similarity = nonl(F.cosine_similarity(
                     vec1 + 1e-16, vec2 + 1e-16, dim=-1))
         elif distance == 'l1':
-            similarity = nonl(torch.sum(vec1 - vec2, dim=1))
+            similarity = nonl(self.dist_fc(torch.abs(vec1 - vec2)))
+            similarity = similarity.squeeze(1)
             # similarity = nonl(torch.sum(torch.abs(vec1 - vec2), dim=1))
         elif distance == 'l2':
-            similarity = nonl(torch.sum(vec1 - vec2, dim=1))
+            similarity = nonl(self.dist_fc(torch.abs(vec1 - vec2)))
+            similarity = similarity.squeeze(1)
             # similarity = nonl(torch.sum(torch.abs((vec1 - vec2) ** 2), dim=1))
 
         return similarity
