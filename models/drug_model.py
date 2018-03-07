@@ -56,6 +56,9 @@ class DrugModel(nn.Module):
                 nn.Linear(drug_embed_dim, hidden_dim)
             )
             # self.init_layers()
+        
+        # Distance function
+        self.dist_fc = nn.Linear(drug_embed_dim, 1)
 
         # Get params and register optimizer
         info, params = self.get_model_params()
@@ -88,17 +91,19 @@ class DrugModel(nn.Module):
             return self.criterion(recon1, inputs)
 
         # Second layer
-        hidden1 = hidden1.clone().detach()
+        self.encoder[0].requires_grad = False
         hidden2 = self.encoder[3](self.encoder[2](hidden1))
         recon2 = self.decoder[1](hidden2)
         if layer_num == 1:
+            hidden1 = hidden1.clone().detach()
             return self.criterion(recon2, hidden1)
 
         # Third layer
-        hidden2 = hidden2.clone().detach()
+        self.encoder[2].requires_grad = False
         hidden3 = self.encoder[4](hidden2)
         recon3 = self.decoder[2](hidden3)
         if layer_num == 2:
+            hidden2 = hidden2.clone().detach()
             return self.criterion(recon3, hidden2)
 
     # Set Siamese network as basic LSTM
@@ -149,9 +154,11 @@ class DrugModel(nn.Module):
             similarity = nonl(F.cosine_similarity(
                     vec1 + 1e-16, vec2 + 1e-16, dim=-1))
         elif distance == 'l1':
-            similarity = nonl(torch.sum(torch.abs(vec1 - vec2), dim=1))
+            similarity = nonl(torch.sum(vec1 - vec2, dim=1))
+            # similarity = nonl(torch.sum(torch.abs(vec1 - vec2), dim=1))
         elif distance == 'l2':
-            similarity = nonl(torch.sum(torch.abs((vec1 - vec2) ** 2), dim=1))
+            similarity = nonl(torch.sum(vec1 - vec2, dim=1))
+            # similarity = nonl(torch.sum(torch.abs((vec1 - vec2) ** 2), dim=1))
 
         return similarity
 
@@ -161,6 +168,9 @@ class DrugModel(nn.Module):
                              self.pretrain_siamese(key2, layer_num))
         else:
             pretrain_loss = None
+            self.encoder[0].requires_grad = True
+            self.encoder[2].requires_grad = True
+            self.encoder[4].requires_grad = True
 
         if not self.is_mlp:
             embed1 = self.siamese_sequence(key1, key1_len) 

@@ -98,7 +98,7 @@ argparser.add_argument('--linear-dr', type=float, default=0.0)
 argparser.add_argument('--char-embed-dim', type=int, default=20)
 argparser.add_argument('--s-idx', type=int, default=0)
 argparser.add_argument('--rep-idx', type=int, default=0)
-argparser.add_argument('--dist-fn', type=str, default='l2')
+argparser.add_argument('--dist-fn', type=str, default='l1')
 argparser.add_argument('--seed', type=int, default=2018)
 
 args = argparser.parse_args()
@@ -155,7 +155,8 @@ def run_experiment(model, dataset, run_fn, args):
         if args.pretrain:
             for k in range(3):
                 LOGGER.info('Pretraining layer %d' % (k+1))
-                run_fn(model, train_loader, dataset, args, metric, True, k)
+                for _ in range(3):
+                    run_fn(model, train_loader, dataset, args, metric, True, k)
 
         best = 0.0
         converge_cnt = 0

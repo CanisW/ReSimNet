@@ -187,6 +187,7 @@ def run_reg(model, loader, dataset, args, metric, train=False, layer_num=None):
         # Metrics for regression
         tmp_tar = score.data.cpu().numpy()
         tmp_pred = outputs.data.cpu().numpy()
+        # print(tmp_tar[:5], tmp_pred[:5])
 
         # Accumulate for final evaluation
         tar_set += list(tmp_tar[:])
