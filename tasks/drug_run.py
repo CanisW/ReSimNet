@@ -272,7 +272,7 @@ def run_reg(model, loader, dataset, args, metric, train=False, layer_num=None):
         'count: {}/{}/{}/{}'.format(
         len(pred_set), len(kk_pred_set), len(ku_pred_set), len(uu_pred_set)))
 
-    return f1
+    return f1_ku
 
 
 # Outputs response embeddings for a given dictionary
