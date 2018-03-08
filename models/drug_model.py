@@ -19,7 +19,7 @@ class DrugModel(nn.Module):
     def __init__(self, input_dim, output_dim, hidden_dim, drug_embed_dim,
             lstm_layer, lstm_dropout, bi_lstm, linear_dropout, char_vocab_size,
             char_embed_dim, char_dropout, dist_fn, learning_rate,
-            binary, is_mlp):
+            binary, is_mlp, weight_decay):
 
         super(DrugModel, self).__init__()
 
@@ -62,7 +62,8 @@ class DrugModel(nn.Module):
 
         # Get params and register optimizer
         info, params = self.get_model_params()
-        self.optimizer = optim.Adam(params, lr=learning_rate, weight_decay=0)
+        self.optimizer = optim.Adam(params, lr=learning_rate, 
+                                    weight_decay=weight_decay)
         # self.optimizer = optim.Adamax(params)
         if binary:
             self.criterion = nn.BCELoss()
@@ -158,7 +159,7 @@ class DrugModel(nn.Module):
             similarity = similarity.squeeze(1)
             # similarity = nonl(torch.sum(torch.abs(vec1 - vec2), dim=1))
         elif distance == 'l2':
-            similarity = nonl(self.dist_fc(torch.abs(vec1 - vec2)))
+            similarity = nonl(self.dist_fc(torch.abs(vec1 - vec2) ** 2))
             similarity = similarity.squeeze(1)
             # similarity = nonl(torch.sum(torch.abs((vec1 - vec2) ** 2), dim=1))
 
