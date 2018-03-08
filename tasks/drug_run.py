@@ -304,7 +304,7 @@ def save_embed(model, dictionary, dataset, args, drug_file):
         d1_l = d1_l.unsqueeze(0)
 
         # Run model amd save embed
-        _, embed1, embed2 = model(d1_r, d1_l, d1_r, d1_l)
+        _, embed1, embed2, _ = model(d1_r, d1_l, d1_r, d1_l)
         assert embed1.data.tolist() == embed2.data.tolist()
         """
         known = False
