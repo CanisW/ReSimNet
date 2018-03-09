@@ -31,8 +31,8 @@ class DrugDataset(object):
         self.drugs = {}
         self.pairs = []
         self.dataset = {'tr': [], 'va': [], 'te': []}
-        self.SR = [0.4, 0.2, 0.4] # split ratio
-        self.UR = 0.3 # Unknown ratio
+        self.SR = [0.7, 0.1, 0.2] # split ratio
+        self.UR = 0.1 # Unknown ratio
         self.input_maxlen = 0
 
         # Drug dictionaries
@@ -126,7 +126,7 @@ class DrugDataset(object):
             for row_idx, row in enumerate(csv_reader):
                 if row_idx == 0:
                     print(row)
-                    print(row[REG_IDX], row[BI_IDX])
+                    print('REG: {}, BI: {}'.format(row[REG_IDX], row[BI_IDX]))
                     continue
                 
                 # Save drugs, score (real-valued), target (binary)
@@ -459,7 +459,7 @@ if __name__ == '__main__':
     drug_id_path = './data/drug/drug_info_2.0.csv'
     drug_sub_path = ['./data/drug/drug_fingerprint_2.0_p2.pkl',
                      './data/drug/drug_mol2vec_2.0_p2.pkl']
-    drug_pair_path = './data/drug/drug_cscore_pair_0.1.csv'
+    drug_pair_path = './data/drug/drug_cscore_pair_0.4.csv'
     save_preprocess = True
     save_path = './data/drug/drug(tmp).pkl'
     load_path = './data/drug/drug(v0.1_info2.0).pkl'
