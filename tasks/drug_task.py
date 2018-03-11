@@ -31,8 +31,8 @@ class DrugDataset(object):
         self.drugs = {}
         self.pairs = []
         self.dataset = {'tr': [], 'va': [], 'te': []}
-        self.SR = [0.4, 0.2, 0.4] # split ratio
-        self.UR = 0.3 # Unknown ratio
+        self.SR = [0.7, 0.1, 0.2] # split ratio
+        self.UR = 0.1 # Unknown ratio
         self.input_maxlen = 0
 
         # Drug dictionaries
@@ -104,11 +104,10 @@ class DrugDataset(object):
         for path in paths:
             print('### Drug subID appending {}'.format(path))
             drug2rep = pickle.load(open(path, 'rb'))
-
-            # Append drug sub id
+            #Append drug sub id
             for drug, rep in drug2rep.items():
                 if drug not in drugs:
-                    drugs[drug] = [rep]
+                   drugs[drug] = [rep]
                 else:
                     drugs[drug].append(rep)
             self.sub_lens.append(len(rep))
@@ -116,7 +115,7 @@ class DrugDataset(object):
         print('Drug rep size {}\n'.format(self.sub_lens))
 
     def process_drug_pair(self, path):
-        print('### Dug pair processing {}'.format(path))
+        print('### Drug pair processing {}'.format(path))
         pair_scores = []
         REG_IDX = 5
         BI_IDX = -1
@@ -209,48 +208,103 @@ class DrugDataset(object):
 
         return {'tr': train, 'va': valid, 'te': test}
 
-    def get_dataloader(self, batch_size=32, shuffle=True, num_workers=5, s_idx=1):
-        train_dataset = Representation(self.dataset['tr'], self.drugs, 
-                                       self._rep_idx, s_idx=s_idx)
-        train_sampler = SortedBatchSampler(train_dataset.lengths(),
-                                           batch_size,
-                                           shuffle=True)
-        train_loader = torch.utils.data.DataLoader(
-            train_dataset,
-            batch_size=batch_size,
-            sampler=train_sampler,
-            num_workers=num_workers,
-            collate_fn=self.collate_fn,
-            pin_memory=True,
-        )
+    def get_dataloader(self, batch_size=32, shuffle=True, num_workers=5, s_idx=0):
+        if self._rep_idx == 4:
+            train_dataset = Rep_graph(self.dataset['tr'], self.drugs, 
+                                    s_idx=s_idx)
+            
+            train_sampler = SortedBatchSampler(train_dataset.lengths(),
+                                               batch_size, shuffle = True)
+            train_loader = torch.utils.data.DataLoader(
+                train_dataset,
+                batch_size = batch_size,
+                sampler = train_sampler,
+                num_workers = num_workers,
+                collate_fn = self.collate_fn_graph,
+                pin_memory = True,
+           )
 
-        valid_dataset = Representation(self.dataset['va'], self.drugs, 
-                                       self._rep_idx, s_idx=s_idx)
-        valid_sampler = SortedBatchSampler(valid_dataset.lengths(),
-                                           batch_size,
-                                           shuffle=False)
-        valid_loader = torch.utils.data.DataLoader(
-            valid_dataset,
-            batch_size=batch_size,
-            sampler=valid_sampler,
-            num_workers=num_workers,
-            collate_fn=self.collate_fn,
-            pin_memory=True,
-        )
+        else:
+            train_dataset = Representation(self.dataset['tr'], self.drugs, 
+                                         self._rep_idx, s_idx=s_idx)
+        
+            train_sampler = SortedBatchSampler(train_dataset.lengths(),
+                                               batch_size,
+                                               shuffle=True)
+        
+            train_loader = torch.utils.data.DataLoader(
+                train_dataset,
+                batch_size=batch_size,
+                sampler=train_sampler,
+                num_workers=num_workers,
+                collate_fn=self.collate_fn,
+                pin_memory=True,
+            )
+        if self._rep_idx == 4:
+            valid_dataset = Rep_graph(self.dataset['va'], self.drugs,
+                                    s_idx = s_idx)
+            
+            valid_sampler = SortedBatchSampler(valid_dataset.lengths(),
+                                               batch_size,
+                                               shuffle=False)
+            
+            valid_loader = torch.utils.data.DataLoader(
+                valid_dataset,
+                batch_size=batch_size,
+                sampler=valid_sampler,
+                num_workers=num_workers,
+                collate_fn=self.collate_fn_graph,
+                pin_memory=True,
+            )
 
-        test_dataset = Representation(self.dataset['te'], self.drugs,
-                                       self._rep_idx, s_idx=s_idx)
-        test_sampler = SortedBatchSampler(test_dataset.lengths(),
-                                           batch_size,
-                                           shuffle=False)
-        test_loader = torch.utils.data.DataLoader(
-            test_dataset,
-            batch_size=batch_size,
-            sampler=test_sampler,
-            num_workers=num_workers,
-            collate_fn=self.collate_fn,
-            pin_memory=True,
-        )
+
+        
+        else:
+            valid_dataset = Representation(self.dataset['va'], self.drugs, 
+                                          self._rep_idx, s_idx=s_idx)
+            valid_sampler = SortedBatchSampler(valid_dataset.lengths(),
+                                               batch_size,
+                                               shuffle=False)
+            valid_loader = torch.utils.data.DataLoader(
+                valid_dataset,
+                batch_size=batch_size,
+                sampler=valid_sampler,
+                num_workers=num_workers,
+                collate_fn=self.collate_fn,
+                pin_memory=True,
+            )
+
+        if self._rep_idx ==4:
+            test_dataset = Rep_graph(self.dataset['te'], self.drugs,
+                                    s_idx = s_idx)
+        
+            test_sampler = SortedBatchSampler(test_dataset.lengths(),
+                                               batch_size,
+                                               shuffle=False)
+            
+            test_loader = torch.utils.data.DataLoader(
+                test_dataset,
+                batch_size=batch_size,
+                sampler=test_sampler,
+                num_workers=num_workers,
+                collate_fn=self.collate_fn_graph,
+                pin_memory=True,
+            )
+        
+        else:
+            test_dataset = Representation(self.dataset['te'], self.drugs,
+                                           self._rep_idx, s_idx=s_idx)
+            test_sampler = SortedBatchSampler(test_dataset.lengths(),
+                                               batch_size,
+                                               shuffle=False)
+            test_loader = torch.utils.data.DataLoader(
+                test_dataset,
+                batch_size=batch_size,
+                sampler=test_sampler,
+                num_workers=num_workers,
+                collate_fn=self.collate_fn,
+                pin_memory=True,
+            )
 
         return train_loader, valid_loader, test_loader
 
@@ -263,7 +317,7 @@ class DrugDataset(object):
         drug1_maxlen = max([len(ex[1]) for ex in batch])
         drug1_reps = torch.FloatTensor(len(batch), drug1_maxlen).zero_()
         drug2_maxlen = max([len(ex[4]) for ex in batch])
-        drug2_reps = torch.FloatTensor(len(batch), drug2_maxlen).zero_()
+        drug2_reps = torch.FloatTensor(len(batch), drug2_maxle/n).zero_()
         scores = torch.FloatTensor(len(batch)).zero_()
 
         for idx, ex in enumerate(batch):
@@ -297,6 +351,52 @@ class DrugDataset(object):
          
         return (drug1_raws, drug1_reps, drug1_lens, 
                 drug2_raws, drug2_reps, drug2_lens, scores)
+       
+    def collate_fn_graph(self, batch):
+        drug1_raws = [ex[0] for ex in batch]
+        drug1_lens = torch.LongTensor([ex[3] for ex in batch]) #num_node
+        drug2_raws = [ex[4] for ex in batch]
+        drug2_lens = torch.LongTensor([ex[7] for ex in batch])
+
+        drug1_maxlen = max([len(ex[1]) for ex in batch])
+        drug1_feature_len = max([len(ex[1][1]) for ex in batch])
+        drug1_features = torch.FloatTensor(len(batch), drug1_maxlen, drug1_feature_len).zero_()
+        drug1_adjs = torch.LongTensor(len(batch), drug1_maxlen*drug1_maxlen).zero_()
+        
+        drug2_maxlen = max([len(ex[5]) for ex in batch])
+        drug2_feature_len = max([len(ex[5][1]) for ex in batch])
+        drug2_features = torch.FloatTensor(len(batch), drug2_maxlen, drug2_feature_len).zero_()
+        drug2_adjs = torch.LongTensor(len(batch), drug2_maxlen*drug2_maxlen).zero_()
+        scores = torch.FloatTensor(len(batch)).zero_()
+
+        for idx, ex in enumerate(batch):
+            drug1_feature = ex[1]
+            drug1_adj = ex[2]
+            drug1_feature = torch.FloatTensor(drug1_feature)
+            drug1_adj = torch.LongTensor(drug1_adj)
+            drug1_adj = drug1_adj.view(drug1_adj.size(0) * drug1_adj.size(0))
+            drug1_features[idx, :drug1_feature.size(0)].copy_(drug1_feature)
+            drug1_adjs[idx, :drug1_adj.size(0)].copy_(drug1_adj)
+
+            drug2_feature = ex[5]
+            drug2_adj = ex[6]
+            drug2_feature = torch.FloatTensor(drug2_feature)
+            drug2_adj = torch.LongTensor(drug2_adj)
+            drug2_adj = drug2_adj.view(drug2_adj.size(0) * drug2_adj.size(0))
+            drug2_features[idx, :drug2_feature.size(0)].copy_(drug2_feature)
+            drug2_adjs[idx, :drug2_adj.size(0)].copy_(drug2_adj)
+            
+            scores[idx] = ex[8]
+            
+            drug1_featrues = Variable(drug1_features)
+            drug1_adjs = Variable(drug1_adjs)
+            drug2_features = Variable(drug2_features)
+            drug2_adjs = Variable(drug2_adjs)
+            scores = Variable(scores)
+
+            return (drug1_raws, drug1_features, drug1_adjs, drug1_lens, 
+                drug2_raws, drug2_features, drug2_adjs, drug2_lens, scores)
+
 
     def decode_data(self, d1, d1_l, d2, d2_l, score):
         d1 = d1.data.tolist()
@@ -313,6 +413,20 @@ class DrugDataset(object):
         # print('Drug2: {}'.format(d2))
         print('Score: {}\n'.format(score.data[0]))
 
+    def decode_data_graph(self, d1_f, d1_a, d1_l, d2_f, d2_a, d2_l, score):
+        '''
+        d1_f = d1_f.data.tolist()
+        d2_a = d2_a.data.tolist()
+        d2_f = d2_f.data.tolist()
+        d2_a = d2_a.data.tolist()
+        '''
+        d1_a = d1_a[0:d1_l*d1_l].view(d1_l,-1)
+        d2_a = d2_a[0:d2_l*d2_l].view(d2_l,-1)
+
+        print('Drug1 : {} \n adj : {} \n num_node: {}'.format(d1_f, d1_a, d1_l))
+        print('Drug2 : {} \n adj : {} \n num_node: {}'.format(d2_f, d2_a, d2_l))
+        print('Score : {} \n'.format(score.data[0]))
+    
     # rep_idx [0, 1, 2, 3]
     def set_rep(self, rep_idx):
         self._rep_idx = rep_idx
@@ -379,9 +493,9 @@ class Representation(Dataset):
 
         # Choose drug representation
         drug1_rep = self.drugs[drug1][self.rep_idx]
-        drug1_len = len(drug1_rep)
+        drug1_len = len(drug1_rep)          
         drug2_rep = self.drugs[drug2][self.rep_idx]
-        drug2_len = len(drug2_rep)
+        drug2_len = len(drug2_rep)          
         
         # Inchi None check
         if self.rep_idx == 1:
@@ -426,6 +540,48 @@ class SortedBatchSampler(Sampler):
     def __len__(self):
         return len(self.lengths)
 
+class Rep_graph(Dataset):
+    def __init__(self, examples, drugs, s_idx):
+        self.examples = examples
+        self.drugs = drugs
+        self.s_idx = s_idx
+        self.rep_idx = 4
+    
+    def __len__(self):
+        return len(self.examples)
+
+    def __getitem__(self, index):
+        #data form : (feature matrix, adjacent matrix) = ([node*feature], [node*node])
+        example = self.examples[index]
+        next_idx = index
+        while (self.drugs[example[0]][self.rep_idx] == 'None' or
+            self.drugs[example[1]][self.rep_idx] == 'None'):
+            next_idx = (next_idx + 1) % len(self.examples)
+            example = self.examples[next_idx]
+        drug1, drug2, scores = example
+
+        drug1_feature = self.drugs[drug1][self.rep_idx][0]
+        drug1_adj = self.drugs[drug1][self.rep_idx][1]
+        drug1_node = len(drug1_feature)
+        drug2_feature = self.drugs[drug2][self.rep_idx][0]
+        drug2_adj = self.drugs[drug2][self.rep_idx][1]
+        drug2_node = len(drug2_feature)
+
+        score = scores[self.s_idx]
+        if self.s_idx == 1:
+            score = float(score > 0)
+        else:
+            score = score/100
+
+        return drug1, drug1_feature, drug1_adj, drug1_node, drug2, drug2_feature, drug2_adj, drug2_node, score
+
+    def lengths(self):
+        def get_longer_length(ex):
+            drug1_len = len(self.drugs[ex[0]][self.rep_idx][0])
+            drug2_len = len(self.drugs[ex[1]][self.rep_idx][1])
+            length = drug1_len if drug1_len > drug2_len else drug2_len
+            return [length, drug1_len, drug2_len]
+        return [get_longer_length(ex) for ex in self.examples]
 """
 [Version Note]
     v0.1: basic implementation
@@ -458,11 +614,12 @@ if __name__ == '__main__':
     # Dataset configuration 
     drug_id_path = './data/drug/drug_info_2.0.csv'
     drug_sub_path = ['./data/drug/drug_fingerprint_2.0_p2.pkl',
-                     './data/drug/drug_mol2vec_2.0_p2.pkl']
+                     './data/drug/drug_mol2vec_2.0_p2.pkl',
+                     './data/drug/drug_2.0_graph_features.pkl']
     drug_pair_path = './data/drug/drug_cscore_pair_0.1.csv'
-    save_preprocess = True
+    save_preprocess = False 
     save_path = './data/drug/drug(tmp).pkl'
-    load_path = './data/drug/drug(v0.1_info2.0).pkl'
+    load_path = './data/drug/drug(v0.1_graph).pkl'
 
     # Save or load dataset
     if save_preprocess:
@@ -474,10 +631,16 @@ if __name__ == '__main__':
         dataset = pickle.load(open(load_path, 'rb'))
    
     # Loader testing
-    dataset.set_rep(rep_idx=0)
-
-    for idx, (d1, d1_r, d1_l, d2, d2_r, d2_l, score) in enumerate(
-            dataset.get_dataloader(batch_size=1600, s_idx=1)[1]):
-        dataset.decode_data(d1_r[0], d1_l[0], d2_r[0], d2_l[0], score[0])
-        pass
+    dataset.set_rep(rep_idx=4)
+    graph = True
+    if graph:
+        for idx,(d1, d1_f, d1_a, d1_l, d2, d2_f, d2_a, d2_l, score) in enumerate(
+                dataset.get_dataloader(batch_size = 1600, s_idx = 0)[1]):
+            dataset.decode_data_graph(d1_f[0], d1_a[0], d1_l[0], d2_f[0], d2_a[0], d2_l[0], score[0])
+            pass
+    else:
+        for idx, (d1, d1_r, d1_l, d2, d2_r, d2_l, score) in enumerate(
+                dataset.get_dataloader(batch_size=1600, s_idx=0)[1]):
+            dataset.decode_data(d1_r[0], d1_l[0], d2_r[0], d2_l[0], score[0])
+            pass
 

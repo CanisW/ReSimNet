@@ -22,7 +22,7 @@ from models.root.utils import *
 
 LOGGER = logging.getLogger()
 
-DATA_PATH = './tasks/data/drug/drug(v0.1).pkl'  # For training (Pair scores)
+DATA_PATH = './tasks/data/drug/drug(v0.4_n).pkl'  # For training (Pair scores)
 DRUG_DIR = './tasks/data/drug/validation/'      # For validation (ex: tox21)
 DRUG_FILES = ['BBBP_fingerprint_3.pkl',
               'clintox_fingerprint_3.pkl',
