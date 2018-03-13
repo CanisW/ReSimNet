@@ -10,7 +10,7 @@ import logging
 
 from torch.autograd import Variable
 from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
-
+from torch.nn.parameter import Parameter
 
 LOGGER = logging.getLogger(__name__)
 
@@ -19,7 +19,8 @@ class DrugModel(nn.Module):
     def __init__(self, input_dim, output_dim, hidden_dim, drug_embed_dim,
             lstm_layer, lstm_dropout, bi_lstm, linear_dropout, char_vocab_size,
             char_embed_dim, char_dropout, dist_fn, learning_rate,
-            binary, is_mlp, weight_decay):
+            binary, is_mlp, weight_decay, is_graph, g_layer, 
+            g_hidden_dim, g_out_dim):
 
         super(DrugModel, self).__init__()
 
@@ -30,9 +31,25 @@ class DrugModel(nn.Module):
         self.dist_fn = dist_fn
         self.binary = binary
         self.is_mlp = is_mlp
-
+        self.is_graph = is_graph
+        self.g_layer = g_layer
+        
+        #For rep_idx 4
+        if is_graph:
+            self.feature_dim = 75 
+            self.g_hidden_dim = g_hidden_dim
+            self.g_out_dim = g_out_dim
+            self.weight1 = Parameter(torch.FloatTensor(
+                        self.feature_dim, self.g_hidden_dim))
+            self.weight2 = Parameter(torch.FloatTensor(
+                        self.g_hidden_dim, self.g_out_dim))
+            #bias : option
+            self.bias1 = Parameter(torch.FloatTensor(self.g_hidden_dim))
+            self.bias2 = Parameter(torch.FloatTensor(self.g_out_dim))
+            self.init_graph()
+        
         # For rep_idx 0, 1
-        if not is_mlp:
+        elif not is_mlp:
             self.char_embed = nn.Embedding(char_vocab_size, char_embed_dim, 
                                            padding_idx=0)
             self.lstm = nn.LSTM(char_embed_dim, drug_embed_dim, lstm_layer,
@@ -70,6 +87,15 @@ class DrugModel(nn.Module):
         else:
             self.criterion = nn.MSELoss()
         LOGGER.info(info)
+    
+    def init_graph(self):
+        stdv1 = 1. / math.sqrt(self.weight1.size(1)) # initialize TODO    
+        stdv2 = 1. / math.sqrt(self.weight2.size(1))
+        
+        self.weight1.data.uniform_(-stdv1, stdv1)
+        self.bias1.data.uniform_(-stdv1, stdv1)
+        self.weight2.data.uniform_(-stdv2, stdv2)
+        self.bias2.data.uniform_(-stdv2, stdv2)
 
     def init_lstm_h(self, batch_size):
         return (Variable(torch.zeros(
@@ -141,7 +167,25 @@ class DrugModel(nn.Module):
             outputs = hidden
         
         return outputs
-    
+
+    def graph_conv(self, features, adjs):
+        weight1 = self.weight1.unsqueeze(0).expand(
+                features.size(0), self.weight1.size(0), self.weight1.size(1))
+        support1 = torch.bmm(features, weight1)
+        layer1 = torch.bmm(adjs, support1) #TODO sparse * dense
+        layer1 = F.relu(layer1 + self.bias1)
+        weight2 = self.weight2.unsqueeze(0).expand(
+                features.size(0), self.weight2.size(0), self.weight2.size(1))
+        support2 = torch.bmm(layer1, weight2)
+        layer2 = torch.bmm(adjs, support2)
+        layer2 = F.relu(layer2 + self.bias2)
+        graph_conv_embed = F.log_softmax(layer2)
+        #Choose pooling operation
+        pool = torch.nn.MaxPool1d(graph_conv_embed.size(1))
+        graph_conv_embed = torch.squeeze(pool(torch.transpose(graph_conv_embed,1,2)))
+        return graph_conv_embed
+
+
     def siamese_basic(self, inputs):
         return self.encoder(inputs.float())
     
@@ -156,7 +200,7 @@ class DrugModel(nn.Module):
                     vec1 + 1e-16, vec2 + 1e-16, dim=-1))
         elif distance == 'l1':
             similarity = nonl(self.dist_fc(torch.abs(vec1 - vec2)))
-            similarity = similarity.squeeze(1)
+            similarity = similarity.squeeze()
             # similarity = nonl(torch.sum(torch.abs(vec1 - vec2), dim=1))
         elif distance == 'l2':
             similarity = nonl(self.dist_fc(torch.abs(vec1 - vec2) ** 2))
@@ -165,20 +209,26 @@ class DrugModel(nn.Module):
 
         return similarity
 
-    def forward(self, key1, key1_len, key2, key2_len, layer_num):
-        if layer_num is not None:
-            pretrain_loss = (self.pretrain_siamese(key1, layer_num) + 
-                             self.pretrain_siamese(key2, layer_num))
-        else:
-            pretrain_loss = None
-            self.encoder[0].requires_grad = True
-            self.encoder[2].requires_grad = True
-            self.encoder[4].requires_grad = True
-
-        if not self.is_mlp:
+    def forward(self, key1, key1_len, key2, key2_len, layer_num, key1_adj, key2_adj):
+        if key1_adj is not None and key2_adj is not None:
+            pretrain_loss = None 
+            embed1 = self.graph_conv(key1, key1_adj)
+            embed2 = self.graph_conv(key2, key2_adj)
+        
+        elif not self.is_mlp and not self.is_graph:
             embed1 = self.siamese_sequence(key1, key1_len) 
             embed2 = self.siamese_sequence(key2, key2_len)
-        else: 
+        
+        else:
+            if layer_num is not None:
+                pretrain_loss = (self.pretrain_siamese(key1, layer_num) + 
+                             self.pretrain_siamese(key2, layer_num))
+            else:
+                pretrain_loss = None
+                self.encoder[0].requires_grad = True
+                self.encoder[2].requires_grad = True
+                self.encoder[4].requires_grad = True
+ 
             embed1 = self.siamese_basic(key1)
             embed2 = self.siamese_basic(key2)
 

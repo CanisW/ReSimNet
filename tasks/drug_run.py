@@ -144,6 +144,8 @@ def run_bi(model, loader, dataset, args, metric, train=False):
 
     return f1_ku
 
+def element(d):
+    return [d[k] for k in range(0,len(d))] 
 
 def run_reg(model, loader, dataset, args, metric, train=False, layer_num=None):
     total_step = 0.0
@@ -157,8 +159,12 @@ def run_reg(model, loader, dataset, args, metric, train=False, layer_num=None):
     uu_tar_set = []
     uu_pred_set = []
     start_time = datetime.now()
-
-    for d_idx, (d1, d1_r, d1_l, d2, d2_r, d2_l, score) in enumerate(loader):
+    
+    for d_idx, d in enumerate(loader):
+        if args.rep_idx == 4:
+            d1, d1_r, d1_a, d1_l, d2, d2_r, d2_a, d2_l, score = element(d)
+        else:
+            d1, d1_r, d1_l, d2, d2_r, d2_l, score = element(d)
 
         # Split for KK/KU/UU sets
         kk_idx = np.argwhere([a in dataset.known and b in dataset.known
@@ -175,8 +181,14 @@ def run_reg(model, loader, dataset, args, metric, train=False, layer_num=None):
         else: model.eval()
 
         # Get outputs
-        outputs, embed1, embed2, ploss = model(d1_r.cuda(), d1_l, 
-                                               d2_r.cuda(), d2_l, layer_num)
+        if args.rep_idx == 4:
+            outputs, embed1, embed2, ploss = model(d1_r.cuda(), d1_l,
+                                                   d2_r.cuda(), d2_r, layer_num,
+                                                   d1_a.cuda(), d2_a.cuda())
+        else:
+            outputs, embed1, embed2, ploss = model(d1_r.cuda(), d1_l, 
+                                               d2_r.cuda(), d2_l, layer_num,
+                                               None, None)
         if ploss is not None:
             loss = ploss
         else:
@@ -187,7 +199,8 @@ def run_reg(model, loader, dataset, args, metric, train=False, layer_num=None):
         # Metrics for regression
         tmp_tar = score.data.cpu().numpy()
         tmp_pred = outputs.data.cpu().numpy()
-        # print(tmp_tar[:5], tmp_pred[:5])
+        print(tmp_tar[uu_idx], tmp_pred[uu_idx])
+        
 
         # Accumulate for final evaluation
         tar_set += list(tmp_tar[:])
@@ -272,7 +285,7 @@ def run_reg(model, loader, dataset, args, metric, train=False, layer_num=None):
         'count: {}/{}/{}/{}'.format(
         len(pred_set), len(kk_pred_set), len(ku_pred_set), len(uu_pred_set)))
 
-    return f1_ku
+    return f1
 
 
 # Outputs response embeddings for a given dictionary

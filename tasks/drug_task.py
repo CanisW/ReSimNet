@@ -125,7 +125,7 @@ class DrugDataset(object):
             for row_idx, row in enumerate(csv_reader):
                 if row_idx == 0:
                     print(row)
-                    print(row[REG_IDX], row[BI_IDX])
+                    print('REG: {}, BI: {}'.format(row[REG_IDX], row[BI_IDX]))
                     continue
                 
                 # Save drugs, score (real-valued), target (binary)
@@ -317,7 +317,7 @@ class DrugDataset(object):
         drug1_maxlen = max([len(ex[1]) for ex in batch])
         drug1_reps = torch.FloatTensor(len(batch), drug1_maxlen).zero_()
         drug2_maxlen = max([len(ex[4]) for ex in batch])
-        drug2_reps = torch.FloatTensor(len(batch), drug2_maxle/n).zero_()
+        drug2_reps = torch.FloatTensor(len(batch), drug2_maxlen).zero_()
         scores = torch.FloatTensor(len(batch)).zero_()
 
         for idx, ex in enumerate(batch):
@@ -361,40 +361,46 @@ class DrugDataset(object):
         drug1_maxlen = max([len(ex[1]) for ex in batch])
         drug1_feature_len = max([len(ex[1][1]) for ex in batch])
         drug1_features = torch.FloatTensor(len(batch), drug1_maxlen, drug1_feature_len).zero_()
-        drug1_adjs = torch.LongTensor(len(batch), drug1_maxlen*drug1_maxlen).zero_()
-        
+        drug1_adjs = torch.FloatTensor(len(batch), drug1_maxlen, drug1_maxlen).zero_()
+
         drug2_maxlen = max([len(ex[5]) for ex in batch])
         drug2_feature_len = max([len(ex[5][1]) for ex in batch])
         drug2_features = torch.FloatTensor(len(batch), drug2_maxlen, drug2_feature_len).zero_()
-        drug2_adjs = torch.LongTensor(len(batch), drug2_maxlen*drug2_maxlen).zero_()
+        drug2_adjs = torch.FloatTensor(len(batch), drug2_maxlen, drug2_maxlen).zero_()
         scores = torch.FloatTensor(len(batch)).zero_()
-
         for idx, ex in enumerate(batch):
             drug1_feature = ex[1]
             drug1_adj = ex[2]
             drug1_feature = torch.FloatTensor(drug1_feature)
-            drug1_adj = torch.LongTensor(drug1_adj)
-            drug1_adj = drug1_adj.view(drug1_adj.size(0) * drug1_adj.size(0))
+            drug1_adj = np.array(drug1_adj)
+            if len(drug1_adj) < drug1_maxlen:
+                pad_length = drug1_maxlen - len(drug1_adj)
+                pad = np.zeros((len(drug1_adj), pad_length))
+                drug1_adj = np.concatenate((drug1_adj,pad), axis=1)
+            drug1_adj = torch.FloatTensor(drug1_adj)
             drug1_features[idx, :drug1_feature.size(0)].copy_(drug1_feature)
             drug1_adjs[idx, :drug1_adj.size(0)].copy_(drug1_adj)
-
+           
             drug2_feature = ex[5]
             drug2_adj = ex[6]
             drug2_feature = torch.FloatTensor(drug2_feature)
-            drug2_adj = torch.LongTensor(drug2_adj)
-            drug2_adj = drug2_adj.view(drug2_adj.size(0) * drug2_adj.size(0))
+            drug2_adj = np.array(drug2_adj)
+            if len(drug2_adj) < drug2_maxlen:
+                pad_length = drug2_maxlen - len(drug2_adj)
+                pad = np.zeros((len(drug2_adj), pad_length))
+                drug2_adj = np.concatenate((drug2_adj,pad), axis=1)
+            drug2_adj = torch.FloatTensor(drug2_adj)
             drug2_features[idx, :drug2_feature.size(0)].copy_(drug2_feature)
             drug2_adjs[idx, :drug2_adj.size(0)].copy_(drug2_adj)
-            
             scores[idx] = ex[8]
             
-            drug1_featrues = Variable(drug1_features)
-            drug1_adjs = Variable(drug1_adjs)
-            drug2_features = Variable(drug2_features)
-            drug2_adjs = Variable(drug2_adjs)
-            scores = Variable(scores)
+        drug1_features = Variable(drug1_features)
+        drug1_adjs = Variable(drug1_adjs)
+        drug2_features = Variable(drug2_features)
+        drug2_adjs = Variable(drug2_adjs)
+        scores = Variable(scores)
 
-            return (drug1_raws, drug1_features, drug1_adjs, drug1_lens, 
+        return (drug1_raws, drug1_features, drug1_adjs, drug1_lens, 
                 drug2_raws, drug2_features, drug2_adjs, drug2_lens, scores)
 
 
@@ -414,14 +420,8 @@ class DrugDataset(object):
         print('Score: {}\n'.format(score.data[0]))
 
     def decode_data_graph(self, d1_f, d1_a, d1_l, d2_f, d2_a, d2_l, score):
-        '''
-        d1_f = d1_f.data.tolist()
-        d2_a = d2_a.data.tolist()
-        d2_f = d2_f.data.tolist()
-        d2_a = d2_a.data.tolist()
-        '''
-        d1_a = d1_a[0:d1_l*d1_l].view(d1_l,-1)
-        d2_a = d2_a[0:d2_l*d2_l].view(d2_l,-1)
+        d1_a = d1_a[0:d1_l*d1_l]
+        d2_a = d2_a[0:d2_l*d2_l]
 
         print('Drug1 : {} \n adj : {} \n num_node: {}'.format(d1_f, d1_a, d1_l))
         print('Drug2 : {} \n adj : {} \n num_node: {}'.format(d2_f, d2_a, d2_l))
@@ -467,6 +467,8 @@ class DrugDataset(object):
         elif self._rep_idx == 2:
             return 2048
         elif self._rep_idx == 3:
+            return 300
+        elif self._rep_idx == 4:
             return 300
         else:
             assert False, 'Wrong rep_idx {}'.format(rep_idx)
@@ -613,9 +615,9 @@ if __name__ == '__main__':
 
     # Dataset configuration 
     drug_id_path = './data/drug/drug_info_2.0.csv'
-    drug_sub_path = ['./data/drug/drug_fingerprint_2.0_p2.pkl',
-                     './data/drug/drug_mol2vec_2.0_p2.pkl',
-                     './data/drug/drug_2.0_graph_features.pkl']
+    drug_sub_path = ['./data/drug/drug_fingerprint_2.0_p2.pkl', 
+                    './data/drug/drug_mol2vec_2.0_p2.pkl', 
+                    './data/drug/drug_2.0_graph_features.pkl']
     drug_pair_path = './data/drug/drug_cscore_pair_0.1.csv'
     save_preprocess = False 
     save_path = './data/drug/drug(tmp).pkl'
@@ -631,8 +633,8 @@ if __name__ == '__main__':
         dataset = pickle.load(open(load_path, 'rb'))
    
     # Loader testing
-    dataset.set_rep(rep_idx=4)
-    graph = True
+    dataset.set_rep(rep_idx=0)
+    graph = False
     if graph:
         for idx,(d1, d1_f, d1_a, d1_l, d2, d2_f, d2_a, d2_l, score) in enumerate(
                 dataset.get_dataloader(batch_size = 1600, s_idx = 0)[1]):
