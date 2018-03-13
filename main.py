@@ -22,7 +22,7 @@ from models.root.utils import *
 
 LOGGER = logging.getLogger()
 
-DATA_PATH = './tasks/data/drug/drug(v0.4).pkl'  # For training (Pair scores)
+DATA_PATH = './tasks/data/drug/drug(v0.1).pkl'  # For training (Pair scores)
 DRUG_DIR = './tasks/data/drug/validation/'      # For validation (ex: tox21)
 DRUG_FILES = ['BBBP_fingerprint_3.pkl',
               'clintox_fingerprint_3.pkl',
@@ -57,6 +57,8 @@ argparser.add_argument('--model-name', type=str, default=MODEL_NAME,
                        help='Model name for saving/loading')
 argparser.add_argument('--print-step', type=float, default=100,
                        help='Display steps')
+argparser.add_argument('--validation-step', type=float, default=100,
+                       help='Number of random search validation')
 argparser.add_argument('--train', type='bool', default=True,
                        help='Enable training')
 argparser.add_argument('--pretrain', type='bool', default=False,
@@ -88,7 +90,7 @@ argparser.add_argument('--grad-clip', type=int, default=10)
 
 # Model config
 argparser.add_argument('--binary', type='bool', default=False)
-argparser.add_argument('--hidden-dim', type=int, default=100)
+argparser.add_argument('--hidden-dim', type=int, default=512)
 argparser.add_argument('--drug-embed-dim', type=int, default=300)
 argparser.add_argument('--lstm-layer', type=int, default=1)
 argparser.add_argument('--lstm-dr', type=float, default=0.0)
@@ -99,7 +101,7 @@ argparser.add_argument('--char-embed-dim', type=int, default=20)
 argparser.add_argument('--s-idx', type=int, default=0)
 argparser.add_argument('--rep-idx', type=int, default=0)
 argparser.add_argument('--dist-fn', type=str, default='l1')
-argparser.add_argument('--seed', type=int, default=2018)
+argparser.add_argument('--seed', type=int, default=None)
 
 args = argparser.parse_args()
 
@@ -246,20 +248,32 @@ def init_seed(seed=None):
     random.seed(seed)
 
 
+def init_parameters(args, model_idx):
+    args.model_name += '-{}'.format(model_idx)
+    args.learning_rate = np.random.uniform(5e-4, 5e-3)
+
+
 def main():
     # Initialize logging and prepare seed
     init_logging(args)
     LOGGER.info('COMMAND: {}'.format(' '.join(sys.argv)))
-    LOGGER.info(args)
-    init_seed(args.seed)
 
     # Get datset, run function, model
     dataset = get_dataset(args.data_path)
     run_fn = get_run_fn(args)
-    model = get_model(args, dataset)
 
-    # Run experiment
-    run_experiment(model, dataset, run_fn, args)
+    # Random search validation
+    for model_idx in range(args.validation_step):
+        LOGGER.info('Validation step {}'.format(model_idx+1))
+        init_seed(args.seed)
+        init_parameters(args, model_idx)
+        LOGGER.info(args)
+
+        # Get model
+        model = get_model(args, dataset)
+
+        # Run experiment
+        run_experiment(model, dataset, run_fn, args)
 
 
 if __name__ == '__main__':

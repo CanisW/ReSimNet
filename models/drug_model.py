@@ -42,12 +42,12 @@ class DrugModel(nn.Module):
         else:
             self.encoder = nn.Sequential(
                 nn.Linear(input_dim, hidden_dim),
-                # nn.Sigmoid(),
+                # nn.Dropout(0.5),
                 nn.ReLU(),
-                nn.Linear(hidden_dim, hidden_dim),
-                nn.ReLU(),
-                # nn.Sigmoid(),
-                nn.Linear(hidden_dim, drug_embed_dim)
+                # nn.Linear(hidden_dim, hidden_dim),
+                # nn.ReLU(),
+                nn.Linear(hidden_dim, drug_embed_dim),
+                # nn.Dropout(0.2),
             )
             # Decoder is used for pretraining
             self.decoder = nn.Sequential(
@@ -80,7 +80,7 @@ class DrugModel(nn.Module):
     def init_layers(self):
         nn.init.xavier_normal(self.encoder[0].weight.data)
         nn.init.xavier_normal(self.encoder[2].weight.data)
-        nn.init.xavier_normal(self.encoder[4].weight.data)
+        # nn.init.xavier_normal(self.encoder[4].weight.data)
 
     def pretrain_siamese(self, inputs, layer_num):
         inputs = inputs.float()
@@ -146,22 +146,15 @@ class DrugModel(nn.Module):
         return self.encoder(inputs.float())
     
     def distance_layer(self, vec1, vec2, distance='l1'):
-        if self.binary:
-            nonl = F.sigmoid
-        else:
-            nonl = F.tanh
-
         if distance == 'cos':
-            similarity = nonl(F.cosine_similarity(
-                    vec1 + 1e-16, vec2 + 1e-16, dim=-1))
+            similarity = F.cosine_similarity(
+                    vec1 + 1e-16, vec2 + 1e-16, dim=-1)
         elif distance == 'l1':
-            similarity = nonl(self.dist_fc(torch.abs(vec1 - vec2)))
+            similarity = self.dist_fc(torch.abs(vec1 - vec2))
             similarity = similarity.squeeze(1)
-            # similarity = nonl(torch.sum(torch.abs(vec1 - vec2), dim=1))
         elif distance == 'l2':
-            similarity = nonl(self.dist_fc(torch.abs(vec1 - vec2) ** 2))
+            similarity = self.dist_fc(torch.abs(vec1 - vec2) ** 2)
             similarity = similarity.squeeze(1)
-            # similarity = nonl(torch.sum(torch.abs((vec1 - vec2) ** 2), dim=1))
 
         return similarity
 
@@ -173,7 +166,7 @@ class DrugModel(nn.Module):
             pretrain_loss = None
             self.encoder[0].requires_grad = True
             self.encoder[2].requires_grad = True
-            self.encoder[4].requires_grad = True
+            # self.encoder[4].requires_grad = True
 
         if not self.is_mlp:
             embed1 = self.siamese_sequence(key1, key1_len) 

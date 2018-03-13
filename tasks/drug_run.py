@@ -226,7 +226,7 @@ def run_reg(model, loader, dataset, args, metric, train=False, layer_num=None):
                 f1_kk, f1_ku, f1_uu) +
                 '{:2d}:{:2d}:{:2d}'.format(
                 et//3600, et%3600//60, et%60))
-            LOGGER.info(_progress)
+            LOGGER.debug(_progress)
 
     # Sort by tar_set and gather top, lower 10%
     def sort_and_slice(list1, list2):
