@@ -23,6 +23,7 @@ from models.root.utils import *
 LOGGER = logging.getLogger()
 
 DATA_PATH = './tasks/data/drug/drug(v0.1).pkl'  # For training (Pair scores)
+# DATA_PATH = './tasks/data/drug/drug(v0.1_graph).pkl' 
 DRUG_DIR = './tasks/data/drug/validation/'      # For validation (ex: tox21)
 DRUG_FILES = ['BBBP_fingerprint_3.pkl',
               'clintox_fingerprint_3.pkl',
@@ -99,9 +100,14 @@ argparser.add_argument('--bi-lstm', type='bool', default=True)
 argparser.add_argument('--linear-dr', type=float, default=0.0)
 argparser.add_argument('--char-embed-dim', type=int, default=20)
 argparser.add_argument('--s-idx', type=int, default=0)
-argparser.add_argument('--rep-idx', type=int, default=0)
+argparser.add_argument('--rep-idx', type=int, default=4)
 argparser.add_argument('--dist-fn', type=str, default='l1')
 argparser.add_argument('--seed', type=int, default=None)
+
+#graph
+argparser.add_argument('--g_layer', type=int, default = 3)
+argparser.add_argument('--g_hidden_dim', type=int, default=300)
+argparser.add_argument('--g_out_dim', type=int, default=300)
 
 args = argparser.parse_args()
 
@@ -204,22 +210,49 @@ def get_run_fn(args):
 
 def get_model(args, dataset):
     dataset.set_rep(args.rep_idx)
-    model = DrugModel(input_dim=dataset.input_dim,
-                      output_dim=1, 
-                      hidden_dim=args.hidden_dim,
-                      drug_embed_dim=args.drug_embed_dim,
-                      lstm_layer=args.lstm_layer,
-                      lstm_dropout=args.lstm_dr,
-                      bi_lstm=args.bi_lstm,
-                      linear_dropout=args.linear_dr,
-                      char_vocab_size=len(dataset.char2idx),
-                      char_embed_dim=args.char_embed_dim,
-                      char_dropout=args.char_dr,
-                      dist_fn=args.dist_fn,
-                      learning_rate=args.learning_rate,
-                      binary=args.binary,
-                      is_mlp=args.rep_idx > 1,
-                      weight_decay=args.weight_decay).cuda()
+    if args.rep_idx == 4:
+        model = DrugModel(input_dim=dataset.input_dim,
+                          output_dim=1, 
+                          hidden_dim=args.hidden_dim,
+                          drug_embed_dim=args.drug_embed_dim,
+                          lstm_layer=args.lstm_layer,
+                          lstm_dropout=args.lstm_dr,
+                          bi_lstm=args.bi_lstm,
+                          linear_dropout=args.linear_dr,
+                          char_vocab_size=len(dataset.char2idx),
+                          char_embed_dim=args.char_embed_dim,
+                          char_dropout=args.char_dr,
+                          dist_fn=args.dist_fn,
+                          learning_rate=args.learning_rate,
+                          binary=args.binary,
+                          is_mlp=False,
+                          weight_decay=args.weight_decay,
+                          is_graph=True,
+                          g_layer=args.g_layer,
+                          g_hidden_dim=args.g_hidden_dim,
+                          g_out_dim=args.g_out_dim).cuda()
+
+    else:
+        model = DrugModel(input_dim=dataset.input_dim,
+                          output_dim=1, 
+                          hidden_dim=args.hidden_dim,
+                          drug_embed_dim=args.drug_embed_dim,
+                          lstm_layer=args.lstm_layer,
+                          lstm_dropout=args.lstm_dr,
+                          bi_lstm=args.bi_lstm,
+                          linear_dropout=args.linear_dr,
+                          char_vocab_size=len(dataset.char2idx),
+                          char_embed_dim=args.char_embed_dim,
+                          char_dropout=args.char_dr,
+                          dist_fn=args.dist_fn,
+                          learning_rate=args.learning_rate,
+                          binary=args.binary,
+                          is_mlp=args.rep_idx > 1,
+                          weight_decay=args.weight_decay,
+                          is_graph=False,
+                          g_layer=None,
+                          g_hidden_dim=None,
+                          g_out_dim=None).cuda()
     return model
 
 
