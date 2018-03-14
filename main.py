@@ -184,7 +184,7 @@ def run_experiment(model, dataset, run_fn, args):
                     break
     
     if args.test:
-        LOGGER.info('Load Validation/Testing')
+        LOGGER.info('Performance Test on Valid & Test Set')
         if args.train or args.resume:
             model.load_checkpoint(args.checkpoint_dir, args.model_name)
         run_fn(model, valid_loader, dataset, args, metric, train=False)
@@ -248,9 +248,9 @@ def init_seed(seed=None):
     random.seed(seed)
 
 
-def init_parameters(args, model_idx):
-    args.model_name += '-{}'.format(model_idx)
-    args.learning_rate = np.random.uniform(5e-4, 5e-3)
+def init_parameters(args, model_name, model_idx):
+    args.model_name = '{}-{}'.format(model_name, model_idx)
+    args.learning_rate = np.random.uniform(1e-4, 2e-3)
 
 
 def main():
@@ -261,12 +261,13 @@ def main():
     # Get datset, run function, model
     dataset = get_dataset(args.data_path)
     run_fn = get_run_fn(args)
+    model_name = args.model_name
 
     # Random search validation
     for model_idx in range(args.validation_step):
         LOGGER.info('Validation step {}'.format(model_idx+1))
         init_seed(args.seed)
-        init_parameters(args, model_idx)
+        init_parameters(args, model_name, model_idx)
         LOGGER.info(args)
 
         # Get model
