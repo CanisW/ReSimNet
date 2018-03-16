@@ -292,7 +292,7 @@ def save_embed(model, dictionary, dataset, args, drug_file):
         drug, rep = [item[k] for k in range(0,len(item))]
         if args.embed_d == 1:
             d1_r = rep[args.rep_idx] 
-            d1_k = True         #TODO
+            d1_k = drug in dataset.known
             d1_l = len(d1_r)
         else:
             d1_r = rep[0]
