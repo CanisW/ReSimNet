@@ -144,10 +144,12 @@ def run_bi(model, loader, dataset, args, metric, train=False):
 
     return f1_ku
 
+
 def element(d):
     return [d[k] for k in range(0,len(d))] 
 
-def run_reg(model, loader, dataset, args, metric, train=False, layer_num=None):
+
+def run_reg(model, loader, dataset, args, metric, train=False):
     total_step = 0.0
     stats = {'loss':[]}
     tar_set = []
@@ -182,25 +184,21 @@ def run_reg(model, loader, dataset, args, metric, train=False, layer_num=None):
 
         # Get outputs
         if args.rep_idx == 4:
-            outputs, embed1, embed2, ploss = model(d1_r.cuda(), d1_l,
-                                                   d2_r.cuda(), d2_r, layer_num,
-                                                   d1_a.cuda(), d2_a.cuda())
+            outputs, embed1, embed2 = model(d1_r.cuda(), d1_l,
+                                            d2_r.cuda(), d2_r,
+                                            d1_a.cuda(), d2_a.cuda())
         else:
-            outputs, embed1, embed2, ploss = model(d1_r.cuda(), d1_l, 
-                                               d2_r.cuda(), d2_l, layer_num,
-                                               None, None)
-        if ploss is not None:
-            loss = ploss
-        else:
-            loss = model.get_loss(outputs, score.cuda())
+            outputs, embed1, embed2 = model(d1_r.cuda(), d1_l, 
+                                            d2_r.cuda(), d2_l,
+                                            None, None)
+        loss = model.get_loss(outputs, score.cuda())
         stats['loss'] += [loss.data[0]]
         total_step += 1.0
 
         # Metrics for regression
         tmp_tar = score.data.cpu().numpy()
         tmp_pred = outputs.data.cpu().numpy()
-        print(tmp_tar[uu_idx], tmp_pred[uu_idx])
-        
+        # print(tmp_tar[uu_idx], tmp_pred[uu_idx])
 
         # Accumulate for final evaluation
         tar_set += list(tmp_tar[:])
@@ -241,26 +239,22 @@ def run_reg(model, loader, dataset, args, metric, train=False, layer_num=None):
                 et//3600, et%3600//60, et%60))
             LOGGER.debug(_progress)
 
-    # Sort by tar_set and gather top, lower 10%
-    def sort_and_slice(list1, list2):
-        list2, list1 = (list(t) for t in zip(*sorted(
-                        zip(list2, list1), reverse=True)))
-        list1 = list1[:len(list1)//100] # + list1[-len(list1)//100:]
-        # list1 = list1[-len(list1)//100:]
-        list2 = list2[:len(list2)//100] # + list2[-len(list2)//100:]
-        # list2 = list2[-len(list2)//100:]
-        return list1, list2
-
     if args.top_only:
-        tar_set, pred_set = sort_and_slice(tar_set, pred_set)
-        top_k = 50
-        print(tar_set[:top_k], pred_set[:top_k])
-        kk_tar_set, kk_pred_set = sort_and_slice(kk_tar_set, kk_pred_set)
-        print(kk_tar_set[:top_k], kk_pred_set[:top_k])
-        ku_tar_set, ku_pred_set = sort_and_slice(ku_tar_set, ku_pred_set)
-        print(ku_tar_set[:top_k], ku_pred_set[:top_k])
-        uu_tar_set, uu_pred_set = sort_and_slice(uu_tar_set, uu_pred_set)
-        print(uu_tar_set[:top_k], uu_pred_set[:top_k])
+        tar_sets = [tar_set, kk_tar_set, ku_tar_set, uu_tar_set]
+        pred_sets = [pred_set, kk_pred_set, ku_pred_set, uu_pred_set]
+        messages = ['Total', 'KK', 'KU', 'UU']
+        top_criterion = 0.05 
+        top_k = 100
+
+        for tar, pred, msg in zip(tar_sets, pred_sets, messages):
+            sorted_target = sorted(tar[:], reverse=True)
+            top_cut = sorted_target[int(len(sorted_target) * top_criterion)]
+
+            sorted_pred, my_target = (list(t) for t in zip(*sorted(
+                                      zip(pred[:], tar[:]), reverse=True)))
+            precision = sum(k >= top_cut for k in my_target[:top_k]) / top_k
+            LOGGER.info('{} Top criterion: {:.2f}, Precision @ {}: {:.2f}'.format(
+                        msg, top_criterion, top_k, precision))
 
     # Calculate acuumulated f1 scores
     f1 = metric(tar_set, pred_set)

@@ -101,7 +101,7 @@ argparser.add_argument('--linear-dr', type=float, default=0.0)
 argparser.add_argument('--char-embed-dim', type=int, default=20)
 argparser.add_argument('--s-idx', type=int, default=0)
 argparser.add_argument('--rep-idx', type=int, default=4)
-argparser.add_argument('--dist-fn', type=str, default='l1')
+argparser.add_argument('--dist-fn', type=str, default='cos')
 argparser.add_argument('--seed', type=int, default=None)
 
 #graph
@@ -159,12 +159,6 @@ def run_experiment(model, dataset, run_fn, args):
     if args.train:
         if args.resume:
             model.load_checkpoint(args.checkpoint_dir, args.model_name)
-        
-        if args.pretrain:
-            for k in range(3):
-                LOGGER.info('Pretraining layer %d' % (k+1))
-                for _ in range(1):
-                    run_fn(model, train_loader, dataset, args, metric, True, k)
 
         best = 0.0
         converge_cnt = 0
