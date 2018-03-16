@@ -59,18 +59,12 @@ class DrugModel(nn.Module):
         else:
             self.encoder = nn.Sequential(
                 nn.Linear(input_dim, hidden_dim),
-                # nn.Sigmoid(),
+                # nn.Dropout(0.5),
                 nn.ReLU(),
-                nn.Linear(hidden_dim, hidden_dim),
-                nn.ReLU(),
-                # nn.Sigmoid(),
-                nn.Linear(hidden_dim, drug_embed_dim)
-            )
-            # Decoder is used for pretraining
-            self.decoder = nn.Sequential(
-                nn.Linear(hidden_dim, input_dim),
-                nn.Linear(hidden_dim, hidden_dim),
-                nn.Linear(drug_embed_dim, hidden_dim)
+                # nn.Linear(hidden_dim, hidden_dim),
+                # nn.ReLU(),
+                nn.Linear(hidden_dim, drug_embed_dim),
+                # nn.Dropout(0.2),
             )
             # self.init_layers()
         
@@ -106,32 +100,7 @@ class DrugModel(nn.Module):
     def init_layers(self):
         nn.init.xavier_normal(self.encoder[0].weight.data)
         nn.init.xavier_normal(self.encoder[2].weight.data)
-        nn.init.xavier_normal(self.encoder[4].weight.data)
-
-    def pretrain_siamese(self, inputs, layer_num):
-        inputs = inputs.float()
-        
-        # First layer
-        hidden1 = self.encoder[1](self.encoder[0](inputs))
-        recon1 = self.decoder[0](hidden1)
-        if layer_num == 0:
-            return self.criterion(recon1, inputs)
-
-        # Second layer
-        self.encoder[0].requires_grad = False
-        hidden2 = self.encoder[3](self.encoder[2](hidden1))
-        recon2 = self.decoder[1](hidden2)
-        if layer_num == 1:
-            hidden1 = hidden1.clone().detach()
-            return self.criterion(recon2, hidden1)
-
-        # Third layer
-        self.encoder[2].requires_grad = False
-        hidden3 = self.encoder[4](hidden2)
-        recon3 = self.decoder[2](hidden3)
-        if layer_num == 2:
-            hidden2 = hidden2.clone().detach()
-            return self.criterion(recon3, hidden2)
+        # nn.init.xavier_normal(self.encoder[4].weight.data)
 
     # Set Siamese network as basic LSTM
     def siamese_sequence(self, inputs, length):
@@ -189,30 +158,21 @@ class DrugModel(nn.Module):
     def siamese_basic(self, inputs):
         return self.encoder(inputs.float())
     
-    def distance_layer(self, vec1, vec2, distance='l1'):
-        if self.binary:
-            nonl = F.sigmoid
-        else:
-            nonl = F.tanh
-
+    def distance_layer(self, vec1, vec2, distance='cos'):
         if distance == 'cos':
-            similarity = nonl(F.cosine_similarity(
-                    vec1 + 1e-16, vec2 + 1e-16, dim=-1))
+            similarity = F.cosine_similarity(
+                    vec1 + 1e-16, vec2 + 1e-16, dim=-1)
         elif distance == 'l1':
-            similarity = nonl(self.dist_fc(torch.abs(vec1 - vec2)))
-            similarity = similarity.squeeze()
-            # similarity = nonl(torch.sum(torch.abs(vec1 - vec2), dim=1))
-        elif distance == 'l2':
-            similarity = nonl(self.dist_fc(torch.abs(vec1 - vec2) ** 2))
+            similarity = self.dist_fc(torch.abs(vec1 - vec2))
             similarity = similarity.squeeze(1)
-            # similarity = nonl(torch.sum(torch.abs((vec1 - vec2) ** 2), dim=1))
+        elif distance == 'l2':
+            similarity = self.dist_fc(torch.abs(vec1 - vec2) ** 2)
+            similarity = similarity.squeeze(1)
 
         return similarity
 
-    def forward(self, key1, key1_len, key2, key2_len, layer_num, 
-                key1_adj, key2_adj):
+    def forward(self, key1, key1_len, key2, key2_len, key1_adj, key2_adj):
         if key1_adj is not None and key2_adj is not None:
-            pretrain_loss = None 
             embed1 = self.graph_conv(key1, key1_adj)
             embed2 = self.graph_conv(key2, key2_adj)
         
@@ -221,20 +181,11 @@ class DrugModel(nn.Module):
             embed2 = self.siamese_sequence(key2, key2_len)
         
         else:
-            if layer_num is not None:
-                pretrain_loss = (self.pretrain_siamese(key1, layer_num) + 
-                             self.pretrain_siamese(key2, layer_num))
-            else:
-                pretrain_loss = None
-                self.encoder[0].requires_grad = True
-                self.encoder[2].requires_grad = True
-                self.encoder[4].requires_grad = True
- 
             embed1 = self.siamese_basic(key1)
             embed2 = self.siamese_basic(key2)
 
         similarity = self.distance_layer(embed1, embed2, self.dist_fn)
-        return similarity, embed1, embed2, pretrain_loss
+        return similarity, embed1, embed2 
     
     def get_loss(self, outputs, targets):
         loss = self.criterion(outputs, targets)

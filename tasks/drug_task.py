@@ -631,8 +631,8 @@ if __name__ == '__main__':
     drug_sub_path = ['./data/drug/drug_fingerprint_2.0_p2.pkl', 
                     './data/drug/drug_mol2vec_2.0_p2.pkl', 
                     './data/drug/drug_2.0_graph_features.pkl']
-    drug_pair_path = './data/drug/drug_cscore_pair_0.1.csv'
-    save_preprocess = False 
+    drug_pair_path = './data/drug/drug_cscore_pair_0.5.csv'
+    save_preprocess = True 
     save_path = './data/drug/drug(tmp).pkl'
     load_path = './data/drug/drug(v0.1_graph).pkl'
 
