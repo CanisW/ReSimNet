@@ -168,16 +168,26 @@ class DrugModel(nn.Module):
         
         return outputs
     
-    def graph_conv(self, features, adjs):
+    def cal_DAD(self, adjs, lens):
+        Ds = torch.FloatTensor(adjs.size(0), adjs.size(1), adjs.size(1))
+        for idx, adj in enumerate(adjs):
+            I = Variable(torch.eye(lens[idx])).cuda()
+            adj = adj.narrow(0,0,lens[idx]) 
+            adj = adj.narrow(1,0,lens[idx])
+            adj_I = adj + I
+            d = torch.diag(torch.sum(adj_I, 1))
+            D = np.linalg.cholesky(d) 
+    def graph_conv(self, features, adjs, lens):
+        adjs_n = self.cal_DAD(adjs, lens) 
         weight1 = self.weight1.unsqueeze(0).expand(
                 features.size(0), self.weight1.size(0), self.weight1.size(1))
         support1 = torch.bmm(features, weight1)
-        layer1 = torch.bmm(adjs, support1) #TODO sparse * dense
+        layer1 = torch.bmm(adjs_n, support1) #TODO sparse * dense
         layer1 = F.relu(layer1 + self.bias1)
         weight2 = self.weight2.unsqueeze(0).expand(
                 features.size(0), self.weight2.size(0), self.weight2.size(1))
         support2 = torch.bmm(layer1, weight2)
-        layer2 = torch.bmm(adjs, support2)
+        layer2 = torch.bmm(adjs_n, support2)
         layer2 = F.relu(layer2 + self.bias2)
         graph_conv_embed = F.log_softmax(layer2)
         #Choose pooling operation
@@ -209,12 +219,11 @@ class DrugModel(nn.Module):
 
         return similarity
 
-    def forward(self, key1, key1_len, key2, key2_len, layer_num, 
-                key1_adj, key2_adj):
+    def forward(self, key1, key1_len, key2, key2_len, layer_num, key1_adj, key2_adj):
         if key1_adj is not None and key2_adj is not None:
             pretrain_loss = None 
-            embed1 = self.graph_conv(key1, key1_adj)
-            embed2 = self.graph_conv(key2, key2_adj)
+            embed1 = self.graph_conv(key1, key1_adj, key1_len)
+            embed2 = self.graph_conv(key2, key2_adj, key2_len)
         
         elif not self.is_mlp and not self.is_graph:
             embed1 = self.siamese_sequence(key1, key1_len) 

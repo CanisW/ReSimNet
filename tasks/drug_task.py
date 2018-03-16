@@ -7,6 +7,7 @@ import os
 import random
 import csv
 import torch
+import scipy.sparse as sp
 
 from os.path import expanduser
 from torch.autograd import Variable
@@ -352,6 +353,14 @@ class DrugDataset(object):
         return (drug1_raws, drug1_reps, drug1_lens, 
                 drug2_raws, drug2_reps, drug2_lens, scores)
        
+    def normalize(self, mx):
+        rowsum = np.array(mx.sum(1)).astype(float)
+        r_inv = np.power(rowsum, -1).flatten()
+        r_inv[np.isinf(r_inv)] = 0
+        r_mat_inv = sp.diags(r_inv)
+        mx = r_mat_inv.dot(mx)
+        return mx
+
     def collate_fn_graph(self, batch):
         drug1_raws = [ex[0] for ex in batch]
         drug1_lens = torch.LongTensor([ex[3] for ex in batch]) #num_node
@@ -368,23 +377,26 @@ class DrugDataset(object):
         drug2_features = torch.FloatTensor(len(batch), drug2_maxlen, drug2_feature_len).zero_()
         drug2_adjs = torch.FloatTensor(len(batch), drug2_maxlen, drug2_maxlen).zero_()
         scores = torch.FloatTensor(len(batch)).zero_()
+
         for idx, ex in enumerate(batch):
-            drug1_feature = ex[1]
+            drug1_feature = self.normalize(np.array(ex[1]))
             drug1_adj = ex[2]
             drug1_feature = torch.FloatTensor(drug1_feature)
             drug1_adj = np.array(drug1_adj)
+            drug1_adj = self.normalize(drug1_adj + np.eye(len(drug1_adj)))
             if len(drug1_adj) < drug1_maxlen:
                 pad_length = drug1_maxlen - len(drug1_adj)
                 pad = np.zeros((len(drug1_adj), pad_length))
-                drug1_adj = np.concatenate((drug1_adj,pad), axis=1)
+                drug1_adj = np.concatenate((drug1_adj, pad), axis=1)
             drug1_adj = torch.FloatTensor(drug1_adj)
             drug1_features[idx, :drug1_feature.size(0)].copy_(drug1_feature)
             drug1_adjs[idx, :drug1_adj.size(0)].copy_(drug1_adj)
-           
-            drug2_feature = ex[5]
+
+            drug2_feature = self.normalize(np.array(ex[5]))
             drug2_adj = ex[6]
             drug2_feature = torch.FloatTensor(drug2_feature)
-            drug2_adj = np.array(drug2_adj)
+            drug2_adj = self.normalize(np.array(drug2_adj))
+            
             if len(drug2_adj) < drug2_maxlen:
                 pad_length = drug2_maxlen - len(drug2_adj)
                 pad = np.zeros((len(drug2_adj), pad_length))
@@ -401,7 +413,8 @@ class DrugDataset(object):
         scores = Variable(scores)
 
         return (drug1_raws, drug1_features, drug1_adjs, drug1_lens, 
-                drug2_raws, drug2_features, drug2_adjs, drug2_lens, scores)
+                drug2_raws, drug2_features, drug2_adjs, drug2_lens, 
+                scores)
 
 
     def decode_data(self, d1, d1_l, d2, d2_l, score):

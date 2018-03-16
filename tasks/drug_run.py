@@ -185,6 +185,7 @@ def run_reg(model, loader, dataset, args, metric, train=False, layer_num=None):
             outputs, embed1, embed2, ploss = model(d1_r.cuda(), d1_l,
                                                    d2_r.cuda(), d2_r, layer_num,
                                                    d1_a.cuda(), d2_a.cuda())
+                                                  
         else:
             outputs, embed1, embed2, ploss = model(d1_r.cuda(), d1_l, 
                                                d2_r.cuda(), d2_l, layer_num,
@@ -199,7 +200,7 @@ def run_reg(model, loader, dataset, args, metric, train=False, layer_num=None):
         # Metrics for regression
         tmp_tar = score.data.cpu().numpy()
         tmp_pred = outputs.data.cpu().numpy()
-        print(tmp_tar[uu_idx], tmp_pred[uu_idx])
+        #print(tmp_tar[uu_idx], tmp_pred[uu_idx])
         
 
         # Accumulate for final evaluation
