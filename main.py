@@ -109,8 +109,8 @@ argparser.add_argument('--seed', type=int, default=None)
 
 #graph
 argparser.add_argument('--g_layer', type=int, default = 3)
-argparser.add_argument('--g_hidden_dim', type=int, default=75)
-argparser.add_argument('--g_out_dim', type=int, default=75)
+argparser.add_argument('--g_hidden_dim', type=int, default=512)
+argparser.add_argument('--g_out_dim', type=int, default=300)
 
 args = argparser.parse_args()
 

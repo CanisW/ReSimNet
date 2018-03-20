@@ -354,10 +354,9 @@ class DrugDataset(object):
                 drug2_raws, drug2_reps, drug2_lens, scores)
        
     def normalize(self, mx):
-        rowsum = np.array(mx.sum(1)).astype(float)
-        r_inv = np.power(rowsum, -1).flatten()
-        r_inv[np.isinf(r_inv)] = 0
-        r_mat_inv = sp.diags(r_inv)
+        rowsum = np.sum(mx, axis=1).astype(float)
+        #rowinv = [1/x for x in rowsum] 
+        r_mat_inv = sp.diags(rowinv)
         mx = r_mat_inv.dot(mx)
         return mx
 

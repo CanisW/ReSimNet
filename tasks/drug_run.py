@@ -343,6 +343,7 @@ def save_embed(model, dictionary, dataset, args, drug_file):
 
 # Outputs pred vs label scores given a dataloader
 def save_prediction(model, loader, dataset, args):
+    
     model.eval()
     csv_writer = csv.writer(open(args.checkpoint_dir + 'pred_' + 
                                  args.model_name + '.csv', 'w'))
@@ -352,7 +353,7 @@ def save_prediction(model, loader, dataset, args):
     for d_idx, (d1, d1_r, d1_l, d2, d2_r, d2_l, score) in enumerate(loader):
 
         # Run model for getting predictions
-        outputs, _, _ = model(d1_r.cuda(), d1_l, d2_r.cuda(), d2_l)
+        outputs, _, _ = model(d1_r.cuda(), d1_l, d2_r.cuda(), d2_l, None, None)
         predictions = outputs.data.cpu().numpy()
         targets = score.data.tolist()
 
