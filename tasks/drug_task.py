@@ -118,7 +118,7 @@ class DrugDataset(object):
         print('### Drug pair processing {}'.format(path))
         pair_scores = []
         REG_IDX = 5
-        BI_IDX = -1
+        BI_IDX = 5
 
         with open(path) as f:
             csv_reader = csv.reader(f)
@@ -506,7 +506,7 @@ class Representation(Dataset):
         # s_idx == 1 means binary classification
         score = scores[self.s_idx]
         if self.s_idx == 1:
-            score = float(score > 0)
+            score = float(score >= 90)
         else:
             score = score / 100.
         return drug1, drug1_rep, drug1_len, drug2, drug2_rep, drug2_len, score
@@ -575,7 +575,8 @@ class Rep_graph(Dataset):
         else:
             score = score/100
 
-        return drug1, drug1_feature, drug1_adj, drug1_node, drug2, drug2_feature, drug2_adj, drug2_node, score
+        return (drug1, drug1_feature, drug1_adj, drug1_node, 
+                drug2, drug2_feature, drug2_adj, drug2_node, score)
 
     def lengths(self):
         def get_longer_length(ex):
@@ -610,16 +611,26 @@ drug_mol2vec_1.0_p3.pkl
 
 """
 
+def init_seed(seed=None):
+    if seed is None:
+        seed = int(round(time.time() * 1000)) % 10000
+
+    LOGGER.info("Using seed={}, pid={}".format(seed, os.getpid()))
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    random.seed(seed)
+
 
 if __name__ == '__main__':
+    init_seed(1004)
 
     # Dataset configuration 
     drug_id_path = './data/drug/drug_info_2.0.csv'
     drug_sub_path = ['./data/drug/drug_fingerprint_2.0_p2.pkl', 
-                    './data/drug/drug_mol2vec_2.0_p2.pkl', 
-                    './data/drug/drug_2.0_graph_features.pkl']
-    drug_pair_path = './data/drug/drug_cscore_pair_0.1.csv'
-    save_preprocess = False 
+                    './data/drug/drug_mol2vec_2.0_p2.pkl', ]
+                    # './data/drug/drug_2.0_graph_features.pkl']
+    drug_pair_path = './data/drug/drug_cscore_pair_0.6.csv'
+    save_preprocess = True
     save_path = './data/drug/drug(tmp).pkl'
     load_path = './data/drug/drug(v0.1_graph).pkl'
 
@@ -642,7 +653,7 @@ if __name__ == '__main__':
             pass
     else:
         for idx, (d1, d1_r, d1_l, d2, d2_r, d2_l, score) in enumerate(
-                dataset.get_dataloader(batch_size=1600, s_idx=0)[1]):
+                dataset.get_dataloader(batch_size=1600, s_idx=1)[1]):
             dataset.decode_data(d1_r[0], d1_l[0], d2_r[0], d2_l[0], score[0])
             pass
 

@@ -169,6 +169,9 @@ class DrugModel(nn.Module):
             similarity = self.dist_fc(torch.abs(vec1 - vec2) ** 2)
             similarity = similarity.squeeze(1)
 
+        if self.binary:
+            similarity = F.sigmoid(similarity)
+
         return similarity
 
     def forward(self, key1, key1_len, key2, key2_len, key1_adj, key2_adj):

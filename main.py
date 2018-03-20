@@ -22,7 +22,7 @@ from models.root.utils import *
 
 LOGGER = logging.getLogger()
 
-DATA_PATH = './tasks/data/drug/drug(v0.1).pkl'  # For training (Pair scores)
+DATA_PATH = './tasks/data/drug/drug(v0.6).pkl'  # For training (Pair scores)
 # DATA_PATH = './tasks/data/drug/drug(v0.1_graph).pkl' 
 DRUG_DIR = './tasks/data/drug/validation/'      # For validation (ex: tox21)
 DRUG_FILES = ['BBBP_fingerprint_3.pkl',
@@ -58,7 +58,7 @@ argparser.add_argument('--model-name', type=str, default=MODEL_NAME,
                        help='Model name for saving/loading')
 argparser.add_argument('--print-step', type=float, default=100,
                        help='Display steps')
-argparser.add_argument('--validation-step', type=float, default=100,
+argparser.add_argument('--validation-step', type=float, default=1,
                        help='Number of random search validation')
 argparser.add_argument('--train', type='bool', default=True,
                        help='Enable training')
@@ -102,7 +102,7 @@ argparser.add_argument('--char-embed-dim', type=int, default=20)
 argparser.add_argument('--s-idx', type=int, default=0)
 argparser.add_argument('--rep-idx', type=int, default=4)
 argparser.add_argument('--dist-fn', type=str, default='cos')
-argparser.add_argument('--seed', type=int, default=None)
+argparser.add_argument('--seed', type=int, default=3)
 
 #graph
 argparser.add_argument('--g_layer', type=int, default = 3)
@@ -278,6 +278,7 @@ def init_seed(seed=None):
 def init_parameters(args, model_name, model_idx):
     args.model_name = '{}-{}'.format(model_name, model_idx)
     args.learning_rate = np.random.uniform(1e-4, 2e-3)
+    # TODO add hidden dimensions
 
 
 def main():
