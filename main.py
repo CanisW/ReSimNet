@@ -25,11 +25,12 @@ LOGGER = logging.getLogger()
 DATA_PATH = './tasks/data/drug/drug(v0.6).pkl'  # For training (Pair scores)
 # DATA_PATH = './tasks/data/drug/drug(v0.1_graph).pkl' 
 DRUG_DIR = './tasks/data/drug/validation/'      # For validation (ex: tox21)
-DRUG_FILES = ['BBBP_fingerprint_3.pkl',
-              'clintox_fingerprint_3.pkl',
-              'sider_fingerprint_3.pkl',
-              'tox21_fingerprint_3.pkl',
-              'toxcast_fingerprint_3.pkl',]
+#DRUG_FILES = ['BBBP_fingerprint_3.pkl',
+#              'clintox_fingerprint_3.pkl',
+#              'sider_fingerprint_3.pkl',
+#              'tox21_fingerprint_3.pkl',
+#              'toxcast_fingerprint_3.pkl',]
+DRUG_FILES = ['drug(v0.5).pkl']
 PAIR_DIR = '/Data/drugs/ki_ki_pair_final/'  # New pair data for scoring
 CKPT_DIR = './results/'
 MODEL_NAME = 'test.mdl'
@@ -80,6 +81,8 @@ argparser.add_argument('--save-pair-score', type='bool', default=False,
                        help='Save predictions with loaded model')
 argparser.add_argument('--top-only', type='bool', default=False,
                        help='Return top/bottom 10% results only')
+argparser.add_argument('--embed-d', type = int, default=1,
+                       help='0:val task data, 1:v0.n data')
 
 # Train config
 argparser.add_argument('--batch-size', type=int, default=32)
@@ -100,13 +103,13 @@ argparser.add_argument('--bi-lstm', type='bool', default=True)
 argparser.add_argument('--linear-dr', type=float, default=0.0)
 argparser.add_argument('--char-embed-dim', type=int, default=20)
 argparser.add_argument('--s-idx', type=int, default=0)
-argparser.add_argument('--rep-idx', type=int, default=4)
+argparser.add_argument('--rep-idx', type=int, default=2)
 argparser.add_argument('--dist-fn', type=str, default='cos')
 argparser.add_argument('--seed', type=int, default=3)
 
 #graph
 argparser.add_argument('--g_layer', type=int, default = 3)
-argparser.add_argument('--g_hidden_dim', type=int, default=300)
+argparser.add_argument('--g_hidden_dim', type=int, default=512)
 argparser.add_argument('--g_out_dim', type=int, default=300)
 
 args = argparser.parse_args()
@@ -136,9 +139,15 @@ def run_experiment(model, dataset, run_fn, args):
     if args.save_embed:
         model.load_checkpoint(args.checkpoint_dir, args.model_name)
         # run_fn(model, test_loader, dataset, args, metric, train=False)
-        for drug_file in args.drug_files:
-            drugs = pickle.load(open(args.drug_dir + drug_file, 'rb'))
-            save_embed(model, drugs, dataset, args, drug_file) 
+        if args.embed_d == 1:
+            for drug_file in args.drug_files:
+                drugs = pickle.load(open(args.drug_dir + drug_file, 'rb'))
+                drugs = drugs.drugs
+                save_embed(model, drugs, dataset, args, drug_file)
+        else:
+            for drug_file in args.drug_files:
+                drugs = pickle.load(open(args.drug_dir + drug_file, 'rb'))
+                save_embed(model, drugs, dataset, args, drug_file) 
         sys.exit()
     
     # Save predictions on test dataset and exit

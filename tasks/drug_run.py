@@ -312,10 +312,16 @@ def save_embed(model, dictionary, dataset, args, drug_file):
     known_cnt = 0
 
     # Iterate drug dictionary
-    for idx, (drug, rep) in enumerate(dictionary.items()):
-        d1_r = rep[0]
-        d1_k = rep[1]
-        d1_l = len(d1_r)
+    for idx, item in enumerate(dictionary.items()):
+        drug, rep = [item[k] for k in range(0,len(item))]
+        if args.embed_d == 1:
+            d1_r = rep[args.rep_idx] 
+            d1_k = drug in dataset.known
+            d1_l = len(d1_r)
+        else:
+            d1_r = rep[0]
+            d1_k = rep[1]
+            d1_l = len(d1_r)
 
         # For string data (smiles/inchikey)
         if args.rep_idx == 0 or args.rep_idx == 1:
@@ -334,7 +340,7 @@ def save_embed(model, dictionary, dataset, args, drug_file):
         d1_l = d1_l.unsqueeze(0)
 
         # Run model amd save embed
-        _, embed1, embed2, _ = model(d1_r, d1_l, d1_r, d1_l)
+        _, embed1, embed2 = model(d1_r, d1_l, d1_r, d1_l, None, None)
         assert embed1.data.tolist() == embed2.data.tolist()
         """
         known = False
@@ -361,6 +367,7 @@ def save_embed(model, dictionary, dataset, args, drug_file):
 
 # Outputs pred vs label scores given a dataloader
 def save_prediction(model, loader, dataset, args):
+    
     model.eval()
     csv_writer = csv.writer(open(args.checkpoint_dir + 'pred_' + 
                                  args.model_name + '.csv', 'w'))
@@ -370,7 +377,7 @@ def save_prediction(model, loader, dataset, args):
     for d_idx, (d1, d1_r, d1_l, d2, d2_r, d2_l, score) in enumerate(loader):
 
         # Run model for getting predictions
-        outputs, _, _ = model(d1_r.cuda(), d1_l, d2_r.cuda(), d2_l)
+        outputs, _, _ = model(d1_r.cuda(), d1_l, d2_r.cuda(), d2_l, None, None)
         predictions = outputs.data.cpu().numpy()
         targets = score.data.tolist()
 

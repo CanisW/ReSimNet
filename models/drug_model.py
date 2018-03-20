@@ -136,7 +136,7 @@ class DrugModel(nn.Module):
             outputs = hidden
         
         return outputs
-
+    
     def graph_conv(self, features, adjs):
         weight1 = self.weight1.unsqueeze(0).expand(
                 features.size(0), self.weight1.size(0), self.weight1.size(1))
@@ -158,7 +158,7 @@ class DrugModel(nn.Module):
     def siamese_basic(self, inputs):
         return self.encoder(inputs.float())
     
-    def distance_layer(self, vec1, vec2, distance='l1'):
+    def distance_layer(self, vec1, vec2, distance='cos'):
         if distance == 'cos':
             similarity = F.cosine_similarity(
                     vec1 + 1e-16, vec2 + 1e-16, dim=-1)
