@@ -47,7 +47,8 @@ def run_bi(model, loader, dataset, args, metric, train=False):
         else: model.eval()
 
         # Get outputs
-        outputs, embed1, embed2 = model(d1_r.cuda(), d1_l, d2_r.cuda(), d2_l)
+        outputs, embed1, embed2 = model(d1_r.cuda(), d1_l, d2_r.cuda(), d2_l, 
+                                        None, None)
         loss = model.get_loss(outputs, score.cuda())
         stats['loss'] += [loss.data[0]]
         total_step += 1.0
@@ -55,7 +56,7 @@ def run_bi(model, loader, dataset, args, metric, train=False):
         # Metrics for binary classification
         tmp_tar = score.data.cpu().numpy()
         tmp_pred = outputs.data.cpu().numpy()
-        tmp_pred = np.array([float(p > 0.5) for p in tmp_pred[:]])
+        tmp_pred = np.array([float(p >= 0.5) for p in tmp_pred[:]])
 
         # Accumulate for final evaluation
         tar_set += list(tmp_tar[:])
@@ -96,7 +97,7 @@ def run_bi(model, loader, dataset, args, metric, train=False):
                 f1_kk, f1_ku, f1_uu) +
                 '{:2d}:{:2d}:{:2d}'.format(
                 et//3600, et%3600//60, et%60))
-            LOGGER.info(_progress)
+            LOGGER.debug(_progress)
 
     # Sort by tar_set and gather top, lower 10%
     def sort_and_slice(list1, list2):
@@ -198,7 +199,8 @@ def run_reg(model, loader, dataset, args, metric, train=False):
         # Metrics for regression
         tmp_tar = score.data.cpu().numpy()
         tmp_pred = outputs.data.cpu().numpy()
-        #print(tmp_tar[uu_idx], tmp_pred[uu_idx])
+        # print(tmp_tar[:10])
+
         # Accumulate for final evaluation
         tar_set += list(tmp_tar[:])
         pred_set += list(tmp_pred[:])
@@ -239,21 +241,43 @@ def run_reg(model, loader, dataset, args, metric, train=False):
             LOGGER.debug(_progress)
 
     if args.top_only:
+    # if False:
         tar_sets = [tar_set, kk_tar_set, ku_tar_set, uu_tar_set]
         pred_sets = [pred_set, kk_pred_set, ku_pred_set, uu_pred_set]
         messages = ['Total', 'KK', 'KU', 'UU']
-        top_criterion = 0.05 
+        top_criterion = 0.10 
         top_k = 100
 
         for tar, pred, msg in zip(tar_sets, pred_sets, messages):
             sorted_target = sorted(tar[:], reverse=True)
-            top_cut = sorted_target[int(len(sorted_target) * top_criterion)]
+            # top_cut = sorted_target[int(len(sorted_target) * top_criterion)]
+            top_cut = 0.9
 
             sorted_pred, my_target = (list(t) for t in zip(*sorted(
                                       zip(pred[:], tar[:]), reverse=True)))
             precision = sum(k >= top_cut for k in my_target[:top_k]) / top_k
-            LOGGER.info('{} Top criterion: {:.2f}, Precision @ {}: {:.2f}'.format(
-                        msg, top_criterion, top_k, precision))
+            LOGGER.info('{} cut: {:.3f}, P@{}: {:.2f}, '.format(
+                        msg, top_cut, top_k, precision) + 
+                        'Pred Mean@100: {:.3f}, Tar Mean@100: {:.3f}'.format(
+                        sum(sorted_pred[:top_k])/top_k, 
+                        sum(my_target[:top_k])/top_k))
+
+    def sort_and_slice(list1, list2):
+        list2, list1 = (list(t) for t in zip(*sorted(
+                        zip(list2, list1), reverse=True)))
+        list1 = list1[:len(list1)//100] + list1[-len(list1)//100:]
+        # list1 = list1[-len(list1)//100:]
+        list2 = list2[:len(list2)//100] + list2[-len(list2)//100:]
+        # list2 = list2[-len(list2)//100:]
+        assert len(list1) == len(list2)
+        return list1, list2
+
+    # if args.top_only:
+    if False:
+        tar_set, pred_set = sort_and_slice(tar_set, pred_set)
+        kk_tar_set, kk_pred_set = sort_and_slice(kk_tar_set, kk_pred_set)
+        ku_tar_set, ku_pred_set = sort_and_slice(ku_tar_set, ku_pred_set)
+        uu_tar_set, uu_pred_set = sort_and_slice(uu_tar_set, uu_pred_set)
 
     # Calculate acuumulated f1 scores
     f1 = metric(tar_set, pred_set)
@@ -278,7 +302,7 @@ def run_reg(model, loader, dataset, args, metric, train=False):
         'count: {}/{}/{}/{}'.format(
         len(pred_set), len(kk_pred_set), len(ku_pred_set), len(uu_pred_set)))
 
-    return f1
+    return f1_ku
 
 
 # Outputs response embeddings for a given dictionary
