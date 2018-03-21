@@ -20,7 +20,7 @@ class DrugModel(nn.Module):
             lstm_layer, lstm_dropout, bi_lstm, linear_dropout, char_vocab_size,
             char_embed_dim, char_dropout, dist_fn, learning_rate,
             binary, is_mlp, weight_decay, is_graph, g_layer, 
-            g_hidden_dim, g_out_dim):
+            g_hidden_dim, g_out_dim, g_dropout):
 
         super(DrugModel, self).__init__()
 
@@ -33,7 +33,8 @@ class DrugModel(nn.Module):
         self.is_mlp = is_mlp
         self.is_graph = is_graph
         self.g_layer = g_layer
-        
+        self.g_dropout = g_dropout
+
         #For rep_idx 4
         if is_graph:
             self.feature_dim = 75 
@@ -42,10 +43,16 @@ class DrugModel(nn.Module):
             self.weight1 = Parameter(torch.FloatTensor(
                         self.feature_dim, self.g_hidden_dim))
             self.weight2 = Parameter(torch.FloatTensor(
+                        self.g_hidden_dim, self.g_hidden_dim))
+            self.weight3 = Parameter(torch.FloatTensor(
+                        self.g_hidden_dim, self.g_hidden_dim))
+            self.weight4 = Parameter(torch.FloatTensor(
                         self.g_hidden_dim, self.g_out_dim))
             #bias : option
             self.bias1 = Parameter(torch.FloatTensor(self.g_hidden_dim))
-            self.bias2 = Parameter(torch.FloatTensor(self.g_out_dim))
+            self.bias2 = Parameter(torch.FloatTensor(self.g_hidden_dim))
+            self.bias3 = Parameter(torch.FloatTensor(self.g_hidden_dim))
+            self.bias4 = Parameter(torch.FloatTensor(self.g_out_dim))
             self.init_graph()
         
         # For rep_idx 0, 1
@@ -83,13 +90,18 @@ class DrugModel(nn.Module):
         LOGGER.info(info)
     
     def init_graph(self):
-        stdv1 = 1. / math.sqrt(self.weight1.size(1)) # initialize TODO    
+        stdv1 = 1. / math.sqrt(self.weight1.size(1))    
         stdv2 = 1. / math.sqrt(self.weight2.size(1))
-        
+        stdv3 = 1. / math.sqrt(self.weight4.size(1))
+
         self.weight1.data.uniform_(-stdv1, stdv1)
         self.bias1.data.uniform_(-stdv1, stdv1)
         self.weight2.data.uniform_(-stdv2, stdv2)
         self.bias2.data.uniform_(-stdv2, stdv2)
+        self.weight3.data.uniform_(-stdv2, stdv2)
+        self.bias3.data.uniform_(-stdv2, stdv2)
+        self.weight4.data.uniform_(-stdv3, stdv3)
+        self.bias4.data.uniform_(-stdv3, stdv3)
 
     def init_lstm_h(self, batch_size):
         return (Variable(torch.zeros(
@@ -141,17 +153,35 @@ class DrugModel(nn.Module):
         weight1 = self.weight1.unsqueeze(0).expand(
                 features.size(0), self.weight1.size(0), self.weight1.size(1))
         support1 = torch.bmm(features, weight1)
-        layer1 = torch.bmm(adjs, support1) #TODO sparse * dense
-        layer1 = F.relu(layer1 + self.bias1)
+        layer1 = torch.bmm(adjs, support1) 
+        layer1_out = F.dropout(F.relu(layer1 + self.bias1), 
+                self.g_dropout)
+        
         weight2 = self.weight2.unsqueeze(0).expand(
-                features.size(0), self.weight2.size(0), self.weight2.size(1))
-        support2 = torch.bmm(layer1, weight2)
+                layer1_out.size(0), self.weight2.size(0), self.weight2.size(1))
+        support2 = torch.bmm(layer1_out, weight2)
         layer2 = torch.bmm(adjs, support2)
-        layer2 = F.relu(layer2 + self.bias2)
-        graph_conv_embed = F.log_softmax(layer2)
+        layer2_out = F.dropout(F.relu(layer2 + self.bias2),
+                self.g_dropout)
+        
+        weight3 = self.weight3.unsqueeze(0).expand(
+                layer2_out.size(0), self.weight3.size(0), self.weight3.size(1))
+        support3 = torch.bmm(layer2_out, weight3)
+        layer3 = torch.bmm(adjs, support3)
+        layer3_out = F.dropout(F.relu(layer3 + self.bias3),
+                self.g_dropout)
+        weight4 = self.weight4.unsqueeze(0).expand(
+                layer3_out.size(0), self.weight4.size(0), self.weight4.size(1))
+        support4 = torch.bmm(layer3_out, weight4)
+        layer4 = torch.bmm(adjs, support4)
+        layer4_out = layer4 + self.bias4
+
+        graph_conv = F.log_softmax(layer4_out)
+        
         #Choose pooling operation
-        pool = torch.nn.MaxPool1d(graph_conv_embed.size(1))
-        graph_conv_embed = torch.squeeze(pool(torch.transpose(graph_conv_embed,1,2)))
+        pool = nn.MaxPool1d(graph_conv.size(1))
+        #pool = nn.AvgPool1d(graph_conv.size(1))
+        graph_conv_embed = torch.squeeze(pool(torch.transpose(graph_conv,1,2)))
         return graph_conv_embed
 
 

@@ -87,7 +87,7 @@ argparser.add_argument('--embed-d', type = int, default=1,
 # Train config
 argparser.add_argument('--batch-size', type=int, default=32)
 argparser.add_argument('--epoch', type=int, default=40)
-argparser.add_argument('--learning-rate', type=float, default=1e-3)
+argparser.add_argument('--learning-rate', type=float, default=0.1)
 argparser.add_argument('--weight-decay', type=float, default=0)
 argparser.add_argument('--grad-max-norm', type=int, default=10)
 argparser.add_argument('--grad-clip', type=int, default=10)
@@ -111,6 +111,7 @@ argparser.add_argument('--seed', type=int, default=None)
 argparser.add_argument('--g_layer', type=int, default = 3)
 argparser.add_argument('--g_hidden_dim', type=int, default=512)
 argparser.add_argument('--g_out_dim', type=int, default=300)
+argparser.add_argument('--g_dropout', type=float, default=0.0)
 
 args = argparser.parse_args()
 
@@ -171,6 +172,7 @@ def run_experiment(model, dataset, run_fn, args):
 
         best = 0.0
         converge_cnt = 0
+        #lr_decay = 0
         for ep in range(args.epoch):
             LOGGER.info('Training Epoch %d' % (ep+1))
             run_fn(model, train_loader, dataset, args, metric, train=True)
@@ -186,9 +188,17 @@ def run_experiment(model, dataset, run_fn, args):
                         'optimizer': model.optimizer.state_dict()},
                         args.checkpoint_dir, args.model_name)
                     converge_cnt = 0
+                    #lr_dacay = 0
                 else:
                     converge_cnt += 1
-                
+                   # lr_decay += 1                
+                '''
+                if lr_decay >= 2:
+                    old_lr = args.learning_rate
+                    args.learning_rate = 1/2 * args.learning_rate 
+                    print("lr_decay from %.3f to %.3f" % (old_lr, args.learning_rate))
+                    lr_decay = 0 
+                '''
                 if converge_cnt >= 3:
                     break
     
@@ -233,8 +243,9 @@ def get_model(args, dataset):
                           is_graph=True,
                           g_layer=args.g_layer,
                           g_hidden_dim=args.g_hidden_dim,
-                          g_out_dim=args.g_out_dim).cuda()
-
+                          g_out_dim=args.g_out_dim,
+                          g_dropout=args.g_dropout).cuda()
+                            
     else:
         model = DrugModel(input_dim=dataset.input_dim,
                           output_dim=1, 
@@ -255,7 +266,8 @@ def get_model(args, dataset):
                           is_graph=False,
                           g_layer=None,
                           g_hidden_dim=None,
-                          g_out_dim=None).cuda()
+                          g_out_dim=None,
+                          g_dropout=None).cuda()
     return model
 
 

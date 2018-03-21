@@ -355,8 +355,11 @@ class DrugDataset(object):
        
     def normalize(self, mx):
         rowsum = np.sum(mx, axis=1).astype(float)
-        #rowinv = [1/x for x in rowsum] 
-        r_mat_inv = sp.diags(rowinv)
+        rowinvs = []
+        for idx, x in enumerate(rowsum):
+            rowinv = 1/x if x != 0 else 0 
+            rowinvs.append(rowinv)
+        r_mat_inv = np.diag(rowinvs)
         mx = r_mat_inv.dot(mx)
         return mx
 
@@ -378,11 +381,13 @@ class DrugDataset(object):
         scores = torch.FloatTensor(len(batch)).zero_()
 
         for idx, ex in enumerate(batch):
-            drug1_feature = self.normalize(np.array(ex[1]))
+            drug1_feature = np.array(ex[1])
+            #drug1_feature = self.normalize(np.array(ex[1]))
             drug1_adj = ex[2]
             drug1_feature = torch.FloatTensor(drug1_feature)
             drug1_adj = np.array(drug1_adj)
-            drug1_adj = self.normalize(drug1_adj + np.eye(len(drug1_adj)))
+            drug1_adj = drug1_adj + np.eye(len(drug1_adj))
+            #drug1_adj = self.normalize(drug1_adj + np.eye(len(drug1_adj)))
             if len(drug1_adj) < drug1_maxlen:
                 pad_length = drug1_maxlen - len(drug1_adj)
                 pad = np.zeros((len(drug1_adj), pad_length))
@@ -391,10 +396,12 @@ class DrugDataset(object):
             drug1_features[idx, :drug1_feature.size(0)].copy_(drug1_feature)
             drug1_adjs[idx, :drug1_adj.size(0)].copy_(drug1_adj)
 
-            drug2_feature = self.normalize(np.array(ex[5]))
+            #drug2_feature = self.normalize(np.array(ex[5]))
+            drug2_feature = np.array(ex[5])
             drug2_adj = ex[6]
             drug2_feature = torch.FloatTensor(drug2_feature)
-            drug2_adj = self.normalize(np.array(drug2_adj))
+            drug2_adj = np.array(drug2_adj) + np.eye(len(drug2_adj))
+            #drug2_adj = self.normalize(np.array(drug2_adj)+ np.eye(len(drug2_adj)))
             
             if len(drug2_adj) < drug2_maxlen:
                 pad_length = drug2_maxlen - len(drug2_adj)
@@ -630,7 +637,7 @@ if __name__ == '__main__':
     drug_sub_path = ['./data/drug/drug_fingerprint_2.0_p2.pkl', 
                     './data/drug/drug_mol2vec_2.0_p2.pkl', 
                     './data/drug/drug_2.0_graph_features.pkl']
-    drug_pair_path = './data/drug/drug_cscore_pair_0.5.csv'
+    drug_pair_path = './data/drug/drug_cscore_pair_0.1.csv'
     save_preprocess = True 
     save_path = './data/drug/drug(tmp).pkl'
     load_path = './data/drug/drug(v0.1_graph).pkl'
