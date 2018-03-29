@@ -59,7 +59,7 @@ argparser.add_argument('--model-name', type=str, default=MODEL_NAME,
                        help='Model name for saving/loading')
 argparser.add_argument('--print-step', type=float, default=100,
                        help='Display steps')
-argparser.add_argument('--validation-step', type=float, default=1,
+argparser.add_argument('--validation-step', type=float, default=100,
                        help='Number of random search validation')
 argparser.add_argument('--train', type='bool', default=True,
                        help='Enable training')
@@ -87,15 +87,15 @@ argparser.add_argument('--embed-d', type = int, default=1,
 # Train config
 argparser.add_argument('--batch-size', type=int, default=32)
 argparser.add_argument('--epoch', type=int, default=40)
-argparser.add_argument('--learning-rate', type=float, default=1e-3)
+argparser.add_argument('--learning-rate', type=float, default=5e-4)
 argparser.add_argument('--weight-decay', type=float, default=0)
 argparser.add_argument('--grad-max-norm', type=int, default=10)
 argparser.add_argument('--grad-clip', type=int, default=10)
 
 # Model config
 argparser.add_argument('--binary', type='bool', default=False)
-argparser.add_argument('--hidden-dim', type=int, default=512)
-argparser.add_argument('--drug-embed-dim', type=int, default=300)
+argparser.add_argument('--hidden-dim', type=int, default=576)
+argparser.add_argument('--drug-embed-dim', type=int, default=200)
 argparser.add_argument('--lstm-layer', type=int, default=1)
 argparser.add_argument('--lstm-dr', type=float, default=0.0)
 argparser.add_argument('--char-dr', type=float, default=0.0)
@@ -171,6 +171,7 @@ def run_experiment(model, dataset, run_fn, args):
 
         best = 0.0
         converge_cnt = 0
+        adaptive_cnt = 0
         for ep in range(args.epoch):
             LOGGER.info('Training Epoch %d' % (ep+1))
             run_fn(model, train_loader, dataset, args, metric, train=True)
@@ -190,6 +191,16 @@ def run_experiment(model, dataset, run_fn, args):
                     converge_cnt += 1
                 
                 if converge_cnt >= 3:
+                    for param_group in model.optimizer.param_groups:
+                        param_group['lr'] *= 0.5
+                        tmp_lr = param_group['lr']
+                    converge_cnt = 0
+                    adaptive_cnt += 1
+                    LOGGER.info('Adaptive {}: learning rate {:.4f}'.format(
+                        adaptive_cnt, model.optimizer.param_groups[0]['lr']))
+
+                if adaptive_cnt > 3:
+                    LOGGER.info('Early stopping applied')
                     break
     
     if args.test:
@@ -287,7 +298,10 @@ def init_seed(seed=None):
 def init_parameters(args, model_name, model_idx):
     args.model_name = '{}-{}'.format(model_name, model_idx)
     args.learning_rate = np.random.uniform(1e-4, 2e-3)
-    # TODO add hidden dimensions
+    args.batch_size = 2 ** np.random.randint(4, 7)
+    args.grad_max_norm = 5 * np.random.randint(1, 5)
+    args.hidden_dim = 64 * np.random.randint(1, 10)
+    args.drug_embed_dim = 50 * np.random.randint(1, 10)
 
 
 def main():
@@ -304,7 +318,7 @@ def main():
     for model_idx in range(args.validation_step):
         LOGGER.info('Validation step {}'.format(model_idx+1))
         init_seed(args.seed)
-        init_parameters(args, model_name, model_idx)
+        # init_parameters(args, model_name, model_idx)
         LOGGER.info(args)
 
         # Get model

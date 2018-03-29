@@ -17,6 +17,10 @@ from models.root.utils import *
 LOGGER = logging.getLogger(__name__)
 
 
+def prob_to_class(prob):
+    return np.array([float(p >= 0.5) for p in prob])
+
+
 def run_bi(model, loader, dataset, args, metric, train=False):
     total_step = 0.0
     stats = {'loss':[]}
@@ -56,7 +60,8 @@ def run_bi(model, loader, dataset, args, metric, train=False):
         # Metrics for binary classification
         tmp_tar = score.data.cpu().numpy()
         tmp_pred = outputs.data.cpu().numpy()
-        tmp_pred = np.array([float(p >= 0.5) for p in tmp_pred[:]])
+        # tmp_pred = np.array([float(p >= 0.5) for p in tmp_pred[:]])
+        # print(tmp_tar[:5], tmp_pred[:5])
 
         # Accumulate for final evaluation
         tar_set += list(tmp_tar[:])
@@ -69,10 +74,10 @@ def run_bi(model, loader, dataset, args, metric, train=False):
         uu_pred_set += list(tmp_pred[uu_idx])
     
         # Calculate current f1 scores
-        f1 = metric(list(tmp_tar[:]), list(tmp_pred[:]))
-        f1_kk = metric(list(tmp_tar[kk_idx]), list(tmp_pred[kk_idx]))
-        f1_ku = metric(list(tmp_tar[ku_idx]), list(tmp_pred[ku_idx]))
-        f1_uu = metric(list(tmp_tar[uu_idx]), list(tmp_pred[uu_idx]))
+        f1 = metric(list(tmp_tar[:]), list(prob_to_class(tmp_pred[:])))
+        f1_kk = metric(list(tmp_tar[kk_idx]), list(prob_to_class(tmp_pred[kk_idx])))
+        f1_ku = metric(list(tmp_tar[ku_idx]), list(prob_to_class(tmp_pred[ku_idx])))
+        f1_uu = metric(list(tmp_tar[uu_idx]), list(prob_to_class(tmp_pred[uu_idx])))
 
         # For binary classification, report f1
         _, _, f1, _ = f1
@@ -99,32 +104,50 @@ def run_bi(model, loader, dataset, args, metric, train=False):
                 et//3600, et%3600//60, et%60))
             LOGGER.debug(_progress)
 
-    # Sort by tar_set and gather top, lower 10%
+    if args.top_only:
+    # if False:
+        tar_sets = [tar_set, kk_tar_set, ku_tar_set, uu_tar_set]
+        pred_sets = [pred_set, kk_pred_set, ku_pred_set, uu_pred_set]
+        messages = ['Total', 'KK', 'KU', 'UU']
+        top_criterion = 0.10 
+        top_k = 100
+
+        for tar, pred, msg in zip(tar_sets, pred_sets, messages):
+            sorted_target = sorted(tar[:], reverse=True)
+            # top_cut = sorted_target[int(len(sorted_target) * top_criterion)]
+            top_cut = 0.9
+
+            sorted_pred, my_target = (list(t) for t in zip(*sorted(
+                                      zip(pred[:], tar[:]), reverse=True)))
+            precision = sum(k >= top_cut for k in my_target[:top_k]) / top_k
+            LOGGER.info('{} cut: {:.3f}, P@{}: {:.2f}, '.format(
+                        msg, top_cut, top_k, precision) + 
+                        'Pred Mean@100: {:.3f}, Tar Mean@100: {:.3f}'.format(
+                        sum(sorted_pred[:top_k])/top_k, 
+                        sum(my_target[:top_k])/top_k))
+
     def sort_and_slice(list1, list2):
         list2, list1 = (list(t) for t in zip(*sorted(
                         zip(list2, list1), reverse=True)))
-        list1 = list1[:len(list1)//100] # + list1[-len(list1)//100:]
+        list1 = list1[:len(list1)//100] + list1[-len(list1)//100:]
         # list1 = list1[-len(list1)//100:]
-        list2 = list2[:len(list2)//100] # + list2[-len(list2)//100:]
+        list2 = list2[:len(list2)//100] + list2[-len(list2)//100:]
         # list2 = list2[-len(list2)//100:]
+        assert len(list1) == len(list2)
         return list1, list2
 
     if args.top_only:
+    # if False:
         tar_set, pred_set = sort_and_slice(tar_set, pred_set)
-        top_k = 50
-        print(tar_set[:top_k], pred_set[:top_k])
         kk_tar_set, kk_pred_set = sort_and_slice(kk_tar_set, kk_pred_set)
-        print(kk_tar_set[:top_k], kk_pred_set[:top_k])
         ku_tar_set, ku_pred_set = sort_and_slice(ku_tar_set, ku_pred_set)
-        print(ku_tar_set[:top_k], ku_pred_set[:top_k])
         uu_tar_set, uu_pred_set = sort_and_slice(uu_tar_set, uu_pred_set)
-        print(uu_tar_set[:top_k], uu_pred_set[:top_k])
 
     # Calculate acuumulated f1 scores
-    f1 = metric(tar_set, pred_set)
-    f1_kk = metric(kk_tar_set, kk_pred_set)
-    f1_ku = metric(ku_tar_set, ku_pred_set)
-    f1_uu = metric(uu_tar_set, uu_pred_set)
+    f1 = metric(tar_set, prob_to_class(pred_set))
+    f1_kk = metric(kk_tar_set, prob_to_class(kk_pred_set))
+    f1_ku = metric(ku_tar_set, prob_to_class(ku_pred_set))
+    f1_uu = metric(uu_tar_set, prob_to_class(uu_pred_set))
     pr, rc, f1, _ = f1
     pr_kk, rc_kk, f1_kk, _ = f1_kk
     pr_ku, rc_ku, f1_ku, _ = f1_ku
@@ -272,8 +295,8 @@ def run_reg(model, loader, dataset, args, metric, train=False):
         assert len(list1) == len(list2)
         return list1, list2
 
-    # if args.top_only:
-    if False:
+    if args.top_only:
+    # if False:
         tar_set, pred_set = sort_and_slice(tar_set, pred_set)
         kk_tar_set, kk_pred_set = sort_and_slice(kk_tar_set, kk_pred_set)
         ku_tar_set, ku_pred_set = sort_and_slice(ku_tar_set, ku_pred_set)

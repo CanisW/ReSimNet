@@ -75,10 +75,13 @@ class DrugModel(nn.Module):
         info, params = self.get_model_params()
         self.optimizer = optim.Adam(params, lr=learning_rate, 
                                     weight_decay=weight_decay)
-        # self.optimizer = optim.Adamax(params)
+        # self.optimizer = optim.SGD(params, lr=learning_rate,
+        #                            momentum=0.5)
         if binary:
-            self.criterion = nn.BCELoss()
+            # self.criterion = nn.BCELoss()
+            self.criterion = lambda x, y: y*torch.log(x) + (1-y)*torch.log(1-x)
         else:
+            # self.criterion = nn.MSELoss(reduce=False)
             self.criterion = nn.MSELoss()
         LOGGER.info(info)
     
@@ -191,7 +194,14 @@ class DrugModel(nn.Module):
         return similarity, embed1, embed2 
     
     def get_loss(self, outputs, targets):
-        loss = self.criterion(outputs, targets)
+        if not self.binary:
+            loss = self.criterion(outputs, targets)
+            # loss = torch.sum(loss * torch.abs(targets)) / loss.size(0)
+        else:
+            loss = -1 * self.criterion(outputs, targets)
+            p_t = targets * outputs + (1 - targets) * (1 - outputs)
+            gamma = 2.
+            loss = torch.sum(((1 - p_t) ** gamma) * loss) / loss.size(0)
         return loss
 
     def get_model_params(self):
