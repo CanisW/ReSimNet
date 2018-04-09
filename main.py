@@ -172,11 +172,9 @@ def run_experiment(model, dataset, run_fn, args):
 
         best = 0.0
         converge_cnt = 0
-<<<<<<< HEAD
         adaptive_cnt = 0
-=======
         #lr_decay = 0
->>>>>>> 1c77d43ed20ccc0493d95d74ed8225306b98d3eb
+
         for ep in range(args.epoch):
             LOGGER.info('Training Epoch %d' % (ep+1))
             run_fn(model, train_loader, dataset, args, metric, train=True)
