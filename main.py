@@ -22,7 +22,8 @@ from models.root.utils import *
 
 LOGGER = logging.getLogger()
 
-DATA_PATH = './tasks/data/drug/drug(v0.6).pkl'  # For training (Pair scores)
+DATA_PATH = './tasks/data/drug/cell_lines(v0.6).pkl'  # Cell line pairs
+# DATA_PATH = './tasks/data/drug/drug(v0.6).pkl'  # For training (Pair scores)
 # DATA_PATH = './tasks/data/drug/drug(v0.1_graph).pkl' 
 DRUG_DIR = './tasks/data/drug/validation/'      # For validation (ex: tox21)
 #DRUG_FILES = ['BBBP_fingerprint_3.pkl',
@@ -121,11 +122,17 @@ if not os.path.exists(args.checkpoint_dir):
     os.makedirs(args.checkpoint_dir)
 
 
-def run_experiment(model, dataset, run_fn, args):
+def run_experiment(model, dataset, run_fn, args, cell_line=None):
 
     # Get dataloaders
-    train_loader, valid_loader, test_loader = dataset.get_dataloader(
-        batch_size=args.batch_size, s_idx=args.s_idx) 
+    if cell_line is None:
+        train_loader, valid_loader, test_loader = dataset.get_dataloader(
+            batch_size=args.batch_size, s_idx=args.s_idx) 
+    else:
+        LOGGER.info('Training on {} cell line'.format(cell_line))
+        train_loader, valid_loader, test_loader = dataset.get_cellloader(
+            batch_size=args.batch_size, s_idx=args.s_idx, cell_line=cell_line)
+
 
     # Set metrics
     if args.binary:
@@ -308,13 +315,13 @@ def init_seed(seed=None):
     random.seed(seed)
 
 
-def init_parameters(args, model_name, model_idx):
-    args.model_name = '{}-{}'.format(model_name, model_idx)
-    args.learning_rate = np.random.uniform(1e-4, 2e-3)
-    args.batch_size = 2 ** np.random.randint(4, 7)
-    args.grad_max_norm = 5 * np.random.randint(1, 5)
-    args.hidden_dim = 64 * np.random.randint(1, 10)
-    args.drug_embed_dim = 50 * np.random.randint(1, 10)
+def init_parameters(args, model_name, model_idx, cell_line='Total'):
+    args.model_name = '{}-{}-{}'.format(cell_line, model_name, model_idx)
+    # args.learning_rate = np.random.uniform(1e-4, 2e-3)
+    # args.batch_size = 2 ** np.random.randint(4, 7)
+    # args.grad_max_norm = 5 * np.random.randint(1, 5)
+    # args.hidden_dim = 64 * np.random.randint(1, 10)
+    # args.drug_embed_dim = 50 * np.random.randint(1, 10)
 
 
 def main():
@@ -332,13 +339,22 @@ def main():
         LOGGER.info('Validation step {}'.format(model_idx+1))
         init_seed(args.seed)
         # init_parameters(args, model_name, model_idx)
-        LOGGER.info(args)
+        # LOGGER.info(args)
 
         # Get model
-        model = get_model(args, dataset)
+        # model = get_model(args, dataset)
 
         # Run experiment
-        run_experiment(model, dataset, run_fn, args)
+        # run_experiment(model, dataset, run_fn, args)
+
+        for cell_line in dataset.cell_lines:
+            init_parameters(args, model_name, model_idx, cell_line)
+            LOGGER.info(args)
+
+            # Get model
+            model = get_model(args, dataset)
+            run_experiment(model, dataset, run_fn, args, cell_line)
+
 
 
 if __name__ == '__main__':

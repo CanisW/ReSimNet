@@ -39,9 +39,9 @@ def run_bi(model, loader, dataset, args, metric, train=False):
         # Split for KK/KU/UU sets
         kk_idx = np.argwhere([a in dataset.known and b in dataset.known
                               for a, b in zip(d1, d2)]).flatten()
-        ku_idx = np.argwhere([(a in dataset.unknown) != (b in dataset.unknown)
+        ku_idx = np.argwhere([(a in dataset.known) != (b in dataset.known)
                               for a, b in zip(d1, d2)]).flatten()
-        uu_idx = np.argwhere([a in dataset.unknown and b in dataset.unknown
+        uu_idx = np.argwhere([a not in dataset.known and b not in dataset.known
                               for a, b in zip(d1, d2)]).flatten()
         assert len(kk_idx) + len(ku_idx) + len(uu_idx) == len(d1)
 
@@ -195,9 +195,9 @@ def run_reg(model, loader, dataset, args, metric, train=False):
         # Split for KK/KU/UU sets
         kk_idx = np.argwhere([a in dataset.known and b in dataset.known
                               for a, b in zip(d1, d2)]).flatten()
-        ku_idx = np.argwhere([(a in dataset.unknown) != (b in dataset.unknown)
+        ku_idx = np.argwhere([(a in dataset.known) != (b in dataset.known)
                               for a, b in zip(d1, d2)]).flatten()
-        uu_idx = np.argwhere([a in dataset.unknown and b in dataset.unknown
+        uu_idx = np.argwhere([a not in dataset.known and b not in dataset.known
                               for a, b in zip(d1, d2)]).flatten()
         assert len(kk_idx) + len(ku_idx) + len(uu_idx) == len(d1)
 

@@ -24,13 +24,17 @@ class DrugDataset(object):
         self.append_drug_sub(drug_sub_path, self.drugs)
 
         # Save drug pair scores
-        self.pairs = self.process_drug_pair(drug_pair_path)
-        self.dataset = self.split_dataset(self.pairs)
+        # self.pairs = self.process_drug_pair(drug_pair_path)
+        self.cell_datasets = self.process_cell_lines(drug_pair_path)
+        # self.dataset = self.split_dataset(self.pairs)
 
     def initial_setting(self):
         # Dataset split into train/valid/test
         self.drugs = {}
         self.pairs = []
+        self.cell_lines = ['MCF7', 'PC3', 'HCC515', 'VCAP',
+                           'A375', 'HA1E', 'A549', 'HEPG2',
+                           'HT29', 'SUMMLY']
         self.dataset = {'tr': [], 'va': [], 'te': []}
         self.SR = [0.7, 0.1, 0.2] # split ratio
         self.UR = 0.1 # Unknown ratio
@@ -100,6 +104,34 @@ class DrugDataset(object):
         print('Inchikey char size {}'.format(len(self.ichar2idx)))
         print('Inchikey maxlen {}\n'.format(self.ichar_maxlen))
         return drugs
+    
+    def process_cell_lines(self, path):
+        cell_pairs = pickle.load(open(path, 'rb'))
+        new_datasets = {}
+        for cell_line in self.cell_lines:
+            '''
+            print('stats of {}'.format(cell_line))
+            print(len(cell_pairs[cell_line + '_tr']))
+            print(len(cell_pairs[cell_line + '_va']))
+            print(len(cell_pairs[cell_line + '_te']))
+            print()
+            '''
+            cell_train = cell_pairs[cell_line + '_tr']
+            cell_train = [[k[0][0], k[0][1], [k[1]]] for k in cell_train]
+            cell_valid = cell_pairs[cell_line + '_va']
+            cell_valid = [[k[0][0], k[0][1], [k[1]]] for k in cell_valid]
+            cell_test = cell_pairs[cell_line + '_te']
+            cell_test = [[k[0][0], k[0][1], [k[1]]] for k in cell_test]
+            new_datasets[cell_line] = {'tr': cell_train,
+                                       'va': cell_valid,
+                                       'te': cell_test}
+
+
+            for d1, d2, _ in cell_train:
+                self.known[d1] = 0
+                self.known[d2] = 0
+
+        return new_datasets
     
     def append_drug_sub(self, paths, drugs):
         for path in paths:
@@ -208,6 +240,102 @@ class DrugDataset(object):
               valid_kk, valid_ku, valid_uu, test_kk, test_ku, test_uu))
 
         return {'tr': train, 'va': valid, 'te': test}
+
+    def get_cellloader(self, batch_size=32, shuffle=True, num_workers=5, s_idx=0,
+                       cell_line='PC3'):
+
+        train_dataset = Representation(self.cell_datasets[cell_line]['tr'], 
+                                       self.drugs, 
+                                       self._rep_idx, s_idx=s_idx)
+    
+        train_sampler = SortedBatchSampler(train_dataset.lengths(),
+                                           batch_size,
+                                           shuffle=True)
+    
+        train_loader = torch.utils.data.DataLoader(
+            train_dataset,
+            batch_size=batch_size,
+            sampler=train_sampler,
+            num_workers=num_workers,
+            collate_fn=self.collate_fn,
+            pin_memory=True,
+        )
+        
+        valid_dataset = Representation(self.cell_datasets[cell_line]['va'], 
+                                       self.drugs, 
+                                        self._rep_idx, s_idx=s_idx)
+        valid_sampler = SortedBatchSampler(valid_dataset.lengths(),
+                                           batch_size,
+                                           shuffle=False)
+        valid_loader = torch.utils.data.DataLoader(
+            valid_dataset,
+            batch_size=batch_size,
+            sampler=valid_sampler,
+            num_workers=num_workers,
+            collate_fn=self.collate_fn,
+            pin_memory=True,
+        )
+
+        test_dataset = Representation(self.cell_datasets[cell_line]['te'], 
+                                      self.drugs,
+                                      self._rep_idx, s_idx=s_idx)
+        test_sampler = SortedBatchSampler(test_dataset.lengths(),
+                                           batch_size,
+                                           shuffle=False)
+        test_loader = torch.utils.data.DataLoader(
+            test_dataset,
+            batch_size=batch_size,
+            sampler=test_sampler,
+            num_workers=num_workers,
+            collate_fn=self.collate_fn,
+            pin_memory=True,
+        )
+
+        return train_loader, valid_loader, test_loader
+
+    def collate_fn(self, batch):
+        drug1_raws = [ex[0] for ex in batch]
+        drug1_lens = torch.LongTensor([ex[2] for ex in batch])
+        drug2_raws = [ex[3] for ex in batch]
+        drug2_lens = torch.LongTensor([ex[5] for ex in batch])
+
+        drug1_maxlen = max([len(ex[1]) for ex in batch])
+        drug1_reps = torch.FloatTensor(len(batch), drug1_maxlen).zero_()
+        drug2_maxlen = max([len(ex[4]) for ex in batch])
+        drug2_reps = torch.FloatTensor(len(batch), drug2_maxlen).zero_()
+        scores = torch.FloatTensor(len(batch)).zero_()
+
+        for idx, ex in enumerate(batch):
+            drug1_rep = ex[1]
+            if self._rep_idx < 2:
+                drug1_rep = list(map(lambda x: self.char2idx[x]
+                                     if x in self.char2idx
+                                     else self.char2idx[self.UNK], ex[1]))
+            drug1_rep = torch.FloatTensor(drug1_rep)
+            drug1_reps[idx, :drug1_rep.size(0)].copy_(drug1_rep)
+
+            drug2_rep = ex[4]
+            if self._rep_idx < 2:
+                drug2_rep = list(map(lambda x: self.char2idx[x]
+                                     if x in self.char2idx
+                                     else self.char2idx[self.UNK], ex[4]))
+            drug2_rep = torch.FloatTensor(drug2_rep)
+            drug2_reps[idx, :drug2_rep.size(0)].copy_(drug2_rep)
+
+            scores[idx] = ex[6]
+
+        # Set to LongTensor if not mol2vec
+        if self._rep_idx != 3:
+            drug1_reps = drug1_reps.long()
+            drug2_reps = drug2_reps.long()
+
+        # Set as Variables
+        drug1_reps = Variable(drug1_reps)
+        drug2_reps = Variable(drug2_reps)
+        scores = Variable(scores)
+         
+        return (drug1_raws, drug1_reps, drug1_lens, 
+                drug2_raws, drug2_reps, drug2_lens, scores)
 
     def get_dataloader(self, batch_size=32, shuffle=True, num_workers=5, s_idx=0):
         if self._rep_idx == 4:
@@ -647,7 +775,8 @@ if __name__ == '__main__':
     drug_sub_path = ['./data/drug/drug_fingerprint_2.0_p2.pkl', 
                     './data/drug/drug_mol2vec_2.0_p2.pkl', ]
                     # './data/drug/drug_2.0_graph_features.pkl']
-    drug_pair_path = './data/drug/drug_cscore_pair_0.7.csv'
+    # drug_pair_path = './data/drug/drug_cscore_pair_0.7.csv'
+    drug_pair_path = './data/drug/cell_lines_pair_0.6.pkl'
     save_preprocess = True
     save_path = './data/drug/drug(tmp).pkl'
     load_path = './data/drug/drug(v0.1_graph).pkl'
@@ -662,7 +791,7 @@ if __name__ == '__main__':
         dataset = pickle.load(open(load_path, 'rb'))
    
     # Loader testing
-    dataset.set_rep(rep_idx=0)
+    dataset.set_rep(rep_idx=1)
     graph = False
     if graph:
         for idx,(d1, d1_f, d1_a, d1_l, d2, d2_f, d2_a, d2_l, score) in enumerate(
@@ -670,8 +799,16 @@ if __name__ == '__main__':
             dataset.decode_data_graph(d1_f[0], d1_a[0], d1_l[0], d2_f[0], d2_a[0], d2_l[0], score[0])
             pass
     else:
+        '''
         for idx, (d1, d1_r, d1_l, d2, d2_r, d2_l, score) in enumerate(
                 dataset.get_dataloader(batch_size=1600, s_idx=1)[1]):
             dataset.decode_data(d1_r[0], d1_l[0], d2_r[0], d2_l[0], score[0])
             pass
+        '''
+        for cell in dataset.cell_lines:
+            print('cell line {}'.format(cell))
+            for idx, (d1, d1_r, d1_l, d2, d2_r, d2_l, score) in enumerate(
+                    dataset.get_cellloader(batch_size=3600, s_idx=0, cell_line=cell)[1]):
+                dataset.decode_data(d1_r[0], d1_l[0], d2_r[0], d2_l[0], score[0])
+                pass
 
