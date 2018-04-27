@@ -25,10 +25,8 @@ $ python3 main.py
 ## Experimental Results
 ### Regression
  |DrugRespons2vec ||| Mol2vec ||| ECFP ||
-Testset Split|Overall CorrCoef|Top/Bottom 1% CorrCoef| AUROC |Overall CorrCoef|Top/Bottom 1% CorrCoef| AUROC |Overall CorrCoef|Top/Bottom 1% CorrCoef| AUROC
-| --- | --- | --- | --- | --- | --- | --- | --- | ---
-| --- | --- | --- | --- | --- | --- | --- | --- | ---
-| --- | --- | --- | --- | --- | --- | --- | --- | ---
+Testset Split|Overall CorrCoef|Top/Bottom 1% CorrCoef|AUROC|Overall CorrCoef|Top/Bottom 1% CorrCoef| AUROC |Overall CorrCoef|Top/Bottom 1% CorrCoef| AUROC
+-------------|----------------|---------------------|-----|----------------|---------------------|-----|----------------|---------------------|-----
 
 ### Binary Classification
 
