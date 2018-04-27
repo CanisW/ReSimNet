@@ -23,16 +23,23 @@ $ python3 main.py
 ```
 
 ## Experimental Results
-### Regression
+### CMap Score Regression
 #### DrugResponse2vec
 Testset Split|Overall CorrCoef|Top/Bottom 1% CorrCoef|AUROC
 -------------|----------------|----------------------|-----
-Total        | 0.447          | 0.877                | 0.693
+Total | 0.447 | 0.877 | 0.693
 KK | 0.606 | 0.932 | 0.777
 KU | 0.340 | 0.737 | 0.639
 UU | 0.120 | 0.240 | 0.555
 
+### CMap Score Binary Classification
 
-### Binary Classification
+#### DrugResponse2vec
+Testset Split|Precision|Recall|F1 Score
+-------------|---------|------|--------
+Total | 0.686 | 0.780 | 0.730
+KK | 0.722 | 0.880 | 0.793
+KU | 0.661 | 0.720 | 0.689
+UU | 0.646 | 0.658 | 0.652
 
 ## Liscense
