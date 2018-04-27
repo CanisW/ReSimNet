@@ -23,6 +23,7 @@ As more data available, it has become possible to data-driven new drug discovery
 ### Preprocess dataset
 Before preprocessing, you should create a directory ./tasks/data/drug/ and unzip files downloaded from [here](https://google.com).
 ```
+# This will create a pickle file ./data/drug/drug(tmp).
 $ cd tasks/
 $ python3 drug_task.py
 ```
