@@ -10,13 +10,17 @@ As more data available, it has become possible to data-driven new drug discovery
 **./main.py** : Run experiments with arguments. <br>
 **./tasks/drug_run.py** : Functions for running experiments. <br>
 **./tasks/drug_task.py** : Preprocess datasets. <br>
-**./models/drug_model.py** : LSTM Siamese network model. <br>
+**./models/drug_model.py** : LSTM Siamese network. <br>
 
 ## Run Code
+### Preprocess dataset
 ```
 $ python3 main.py
 ```
-
+### Train/test LSTM Siamese network.
+```
+$ python3 main.py
+```
 
 ## Experimental Results
 ### Regression
