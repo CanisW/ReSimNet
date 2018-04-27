@@ -24,10 +24,11 @@ $ python3 main.py
 
 ## Experimental Results
 ### Regression
-aaa | aaa
---- | ---
-fff | fff
-fff | sddd
+|DrugRespons2vec | Mol2vec | ECFP
+Testset Split|Overall CorrCoef|Top/Bottom 1% CorrCoef| AUROC |Overall CorrCoef|Top/Bottom 1% CorrCoef| AUROC |Overall CorrCoef|Top/Bottom 1% CorrCoef| AUROC
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | 
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | 
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | 
 
 ### Binary Classification
 
