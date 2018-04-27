@@ -21,8 +21,10 @@ As more data available, it has become possible to data-driven new drug discovery
 * Pytorch 0.3.0
 
 ### Preprocess dataset
+Before preprocessing, you should create a directory ./tasks/data/drug/ and unzip files downloaded from [here](https://google.com).
 ```
-$ python3 main.py
+$ cd tasks/
+$ python3 drug_task.py
 ```
 ### Train/test LSTM Siamese network.
 ```
