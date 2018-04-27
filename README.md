@@ -6,6 +6,9 @@ A Pytorch Implementation of paper
 ## Abstract
 As more data available, it has become possible to data-driven new drug discovery pipeline. We, therefore, propose a model for predicting a similarity score between two drugs based on the differential gene expression patterns of the two drugs. Our model trains a Siamese neural network that takes fingerprints of a pair of two drugs and predicts its similarity score.
 
+## Pipeline
+![Full Pipeline](/images/pipeline.png)
+
 ## Project Structure
 **./main.py** : Run experiments with arguments. <br>
 **./tasks/drug_run.py** : Functions for running experiments. <br>
