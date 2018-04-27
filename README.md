@@ -13,6 +13,10 @@ As more data available, it has become possible to data-driven new drug discovery
 **./models/drug_model.py** : LSTM Siamese network. <br>
 
 ## Run Code
+### Requirement
+* Python 3.4.3
+* Pytorch 0.3.0
+
 ### Preprocess dataset
 ```
 $ python3 main.py
@@ -33,7 +37,6 @@ KU | 0.340 | 0.737 | 0.639
 UU | 0.120 | 0.240 | 0.555
 
 ### CMap Score Binary Classification
-
 #### DrugResponse2vec
 Testset Split|Precision|Recall|F1 Score
 -------------|---------|------|--------
@@ -43,3 +46,4 @@ KU | 0.661 | 0.720 | 0.689
 UU | 0.646 | 0.658 | 0.652
 
 ## Liscense
+Apache License 2.0
