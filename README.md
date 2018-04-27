@@ -25,8 +25,8 @@ $ python3 main.py
 ## Experimental Results
 ### Regression
 
-Testset Split|Overall CorrCoef|Top/Bottom 1% CorrCoef|AUROC|Overall CorrCoef|Top/Bottom 1% CorrCoef| AUROC |Overall CorrCoef|Top/Bottom 1% CorrCoef| AUROC
--------------|----------------|---------------------|-----|----------------|---------------------|-----|----------------|---------------------|-----
+Testset Split|Overall CorrCoef|Top/Bottom CorrCoef|AUROC|Overall CorrCoef|Top/Bottom CorrCoef| AUROC |Overall CorrCoef|Top/Bottom CorrCoef| AUROC
+-------------|----------------|-------------------|-----|----------------|-------------------|-----|----------------|-------------------|-----
 
  |DrugRespons2vec ||| Mol2vec ||| ECFP ||
 g|DrugRespons2vec
