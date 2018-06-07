@@ -55,21 +55,13 @@ $ python3 main.py --rep-idx 2 --train True --test True
 ## Experimental Results
 ### CMap Score Regression
 #### DrugResponse2vec
-Testset Split|Overall CorrCoef|Top/Bottom 1% CorrCoef|AUROC
+Testset Split|Correlation|MSE (Total / 1% / 2% / 5%)|AUROC
 -------------|----------------|----------------------|-----
-Total | 0.447 | 0.877 | 0.693
-KK | 0.606 | 0.932 | 0.777
-KU | 0.340 | 0.737 | 0.639
-UU | 0.120 | 0.240 | 0.555
+Total | 0.447 | 0.091 / 0.012 / 0.015 / 0.028 | 0.693
+KK | 0.606 | 0.072 / 0.008 / 0.007 / 0.008 | 0.777
+KU | 0.340 | 0.102 / 0.029 / 0.039 / 0.044 | 0.639
+UU | 0.120 | 0.114 / 0.048 / 0.074 / 0.117 | 0.555
 
-### CMap Score Binary Classification
-#### DrugResponse2vec
-Testset Split|Precision|Recall|F1 Score
--------------|---------|------|--------
-Total | 0.686 | 0.780 | 0.730
-KK | 0.722 | 0.880 | 0.793
-KU | 0.661 | 0.720 | 0.689
-UU | 0.646 | 0.658 | 0.652
 
 ## Liscense
 Apache License 2.0
