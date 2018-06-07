@@ -1,4 +1,4 @@
-# DrugResponse2Vec
+# ReSimNet
 A Pytorch Implementation of paper
 > ReSimNet: Drug Response Similarity Prediction based on Siamese Neural Network <br>
 > Jeon and Park et al., 2018
