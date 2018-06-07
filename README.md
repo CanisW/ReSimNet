@@ -1,6 +1,6 @@
 # DrugResponse2Vec
 A Pytorch Implementation of paper
-> DrugResponse2vec: Representation of Drug in Vector Space based on Drug-Cell line Response <br>
+> ReSimNet: Drug Response Similarity Prediction based on Siamese Neural Network <br>
 > Jeon and Park et al., 2018
 
 ## Abstract
