@@ -53,8 +53,6 @@ $ python3 main.py --rep-idx 2 --train True --test True
 ```
 
 ## Experimental Results
-### CMap Score Regression
-#### DrugResponse2vec
 Testset Split|Correlation|MSE (Total / 1% / 2% / 5%)|AUROC
 -------------|----------------|----------------------|-----
 Total | 0.447 | 0.091 / 0.012 / 0.015 / 0.028 | 0.693
