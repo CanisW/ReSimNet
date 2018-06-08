@@ -117,11 +117,6 @@ argparser.add_argument('--g_dropout', type=float, default=0.0)
 args = argparser.parse_args()
 
 
-# Create dirs
-if not os.path.exists(args.checkpoint_dir):
-    os.makedirs(args.checkpoint_dir)
-
-
 def run_experiment(model, dataset, run_fn, args, cell_line=None):
 
     # Get dataloaders
