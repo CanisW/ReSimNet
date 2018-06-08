@@ -24,11 +24,19 @@ $. download.sh
 # Save scores of sample pair data
 $. predict.sh
 ```
-- Input Fingerprint pair file must be a .csv file in which every row consists of two columns denoting two Fingerprints of each pair (please, place files under './tasks/data/pairs/').
-- Predicted CMap scores will be at each row of a file './results/input-pair-file.model-name.csv'.
-
+Input Fingerprint pair file must be a .csv file in which every row consists of two columns denoting two Fingerprints of each pair. Please, place files under './tasks/data/pairs/'. 
 ```bash
-# Sample results
+# Sample Fingerprints (./tasks/data/pairs/examples.csv)
+drug_A,drug_B
+000000...01000,00010...01000
+000000...00010,00000...00100
+010000...10000,00000...00000
+000100...01000,00001...01000
+000000...00000,01000...10000
+```
+Predicted CMap scores will be saved at each row of a file './results/input-pair-file.model-name.csv'.
+```bash
+# Sample results (./results/examples.csv.resimnet_pretrained.csv')
 prediction
 0.9146181344985962
 0.9301251173019409
