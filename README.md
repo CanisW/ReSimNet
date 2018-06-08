@@ -9,9 +9,11 @@ As more data available, it has become possible to data-driven new drug discovery
 ## Pipeline
 ![Full Pipeline](/images/pipeline_updated_kang2.png)
 
-## Requirement
-* Python 3.4.3
-* Pytorch 0.3.0
+## Requirements
+- Install [cuda-8.0](https://developer.nvidia.com/cuda-downlaods)
+- Install [cudnn-v5.1](https://developer.nvidia.com/cudnn)
+- Install [Pytorch 0.3.0](https://pytorch.org/)
+- Python version >= 3.4.3 is required
 
 ## Download dataset & pretrained model
 ```bash

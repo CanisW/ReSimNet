@@ -435,7 +435,7 @@ def save_pair_score(model, pair_dir, dataset, args):
 
                 # Ready for reader and writer
                 csv_reader = csv.reader(f)
-                csv_writer = csv.writer(open('/Data/drugs/results/final/' +
+                csv_writer = csv.writer(open('./results/' +
                                              file_ + '.' + args.model_name + 
                                              '.csv', 'w'))
                 csv_writer.writerow(['prediction'])
@@ -484,7 +484,7 @@ def save_pair_score(model, pair_dir, dataset, args):
 
                         # Run model
                         output, _, _ = model(inputs[1].cuda(), inputs[2],
-                                             inputs[4].cuda(), inputs[5])
+                                             inputs[4].cuda(), inputs[5], None, None)
                         pred = output.data.tolist()
                     
                         assert len(batch) == len(pred)
@@ -499,7 +499,7 @@ def save_pair_score(model, pair_dir, dataset, args):
                 if len(batch) > 0:
                     inputs = dataset.collate_fn(batch)
                     output, _, _ = model(inputs[1].cuda(), inputs[2],
-                                         inputs[4].cuda(), inputs[5])
+                                         inputs[4].cuda(), inputs[5], None, None)
                     pred = output.data.tolist()
                     assert len(batch) == len(pred)
                     for ex, p in zip(batch, pred):

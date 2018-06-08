@@ -22,8 +22,8 @@ from models.root.utils import *
 
 LOGGER = logging.getLogger()
 
-DATA_PATH = './tasks/data/drug/cell_lines(v0.6).pkl'  # Cell line pairs
-# DATA_PATH = './tasks/data/drug/drug(v0.6).pkl'  # For training (Pair scores)
+# DATA_PATH = './tasks/data/cell_lines(v0.6).pkl'  # Cell line pairs
+DATA_PATH = './tasks/data/drug(v0.6).pkl'  # For training (Pair scores)
 # DATA_PATH = './tasks/data/drug/drug(v0.1_graph).pkl' 
 DRUG_DIR = './tasks/data/drug/validation/'      # For validation (ex: tox21)
 #DRUG_FILES = ['BBBP_fingerprint_3.pkl',
@@ -32,7 +32,7 @@ DRUG_DIR = './tasks/data/drug/validation/'      # For validation (ex: tox21)
 #              'tox21_fingerprint_3.pkl',
 #              'toxcast_fingerprint_3.pkl',]
 DRUG_FILES = ['drug(v0.5).pkl']
-PAIR_DIR = '/Data/drugs/ki_ki_pair_final/'  # New pair data for scoring
+PAIR_DIR = './tasks/data/pairs/'  # New pair data for scoring
 CKPT_DIR = './results/'
 MODEL_NAME = 'test.mdl'
 
@@ -95,8 +95,8 @@ argparser.add_argument('--grad-clip', type=int, default=10)
 
 # Model config
 argparser.add_argument('--binary', type='bool', default=False)
-argparser.add_argument('--hidden-dim', type=int, default=576)
-argparser.add_argument('--drug-embed-dim', type=int, default=200)
+argparser.add_argument('--hidden-dim', type=int, default=512)
+argparser.add_argument('--drug-embed-dim', type=int, default=350)
 argparser.add_argument('--lstm-layer', type=int, default=1)
 argparser.add_argument('--lstm-dr', type=float, default=0.0)
 argparser.add_argument('--char-dr', type=float, default=0.0)
@@ -337,11 +337,12 @@ def main():
         # LOGGER.info(args)
 
         # Get model
-        # model = get_model(args, dataset)
+        model = get_model(args, dataset)
 
         # Run experiment
-        # run_experiment(model, dataset, run_fn, args)
+        run_experiment(model, dataset, run_fn, args)
 
+        '''
         for cell_line in dataset.cell_lines:
             init_parameters(args, model_name, model_idx, cell_line)
             LOGGER.info(args)
@@ -349,6 +350,7 @@ def main():
             # Get model
             model = get_model(args, dataset)
             run_experiment(model, dataset, run_fn, args, cell_line)
+        '''
 
 
 
