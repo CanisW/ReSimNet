@@ -19,10 +19,10 @@ As more data available, it has become possible to data-driven new drug discovery
 For your own fingerprint pairs, ReSimNet provides a predicted CMap Score for each pair. Running download.sh and test.sh will first download pretrained ReSimNet with sample datasets, and save a result file for predicted CMap scores.
 ```bash
 # Download datasets and pretrained model from S3
-$. download.sh
+$ bash download.sh
 
 # Save scores of sample pair data
-$. predict.sh
+$ bash predict.sh
 ```
 Input Fingerprint pair file must be a .csv file in which every row consists of two columns denoting two Fingerprints of each pair. Please, place files under './tasks/data/pairs/'. 
 ```bash
