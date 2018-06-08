@@ -20,7 +20,7 @@ $ . download.sh
 ```
 
 ## Test model
-```
+```bash
 # Test with default setting
 $ . test.sh
 ```
