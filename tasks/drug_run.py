@@ -435,9 +435,8 @@ def save_pair_score(model, pair_dir, dataset, args):
 
                 # Ready for reader and writer
                 csv_reader = csv.reader(f)
-                csv_writer = csv.writer(open('./results/' +
-                                             file_ + '.' + args.model_name + 
-                                             '.csv', 'w'))
+                save_file_name = './results/' + file_ + '.' + args.model_name + '.csv'
+                csv_writer = csv.writer(open(save_file_name, 'w'))
                 csv_writer.writerow(['prediction'])
                 '''
                 # For stats
@@ -509,3 +508,4 @@ def save_pair_score(model, pair_dir, dataset, args):
                     batch = []
 
                 # LOGGER.info('kk/ku/uu stats: {}..'.format(sorted(stats.items())))
+            LOGGER.info('results saved as {}..'.format(save_file_name))
