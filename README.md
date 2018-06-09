@@ -16,7 +16,7 @@ As more data available, it has become possible to data-driven new drug discovery
 - Python version >= 3.4.3 is required
 
 ## CMap Score Prediction using ReSimNet
-For your own fingerprint pairs, ReSimNet provides a predicted CMap Score for each pair. Running download.sh and test.sh will first download pretrained ReSimNet with sample datasets, and save a result file for predicted CMap scores.
+For your own fingerprint pairs, ReSimNet provides a predicted CMap score for each pair. Running download.sh and predict.sh will first download pretrained ReSimNet with sample datasets, and save a result file for predicted CMap scores.
 ```bash
 # Clone repository
 $ git clone https://github.com/jhyuklee/ReSimNet.git
