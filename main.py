@@ -24,7 +24,7 @@ LOGGER = logging.getLogger()
 
 # DATA_PATH = './tasks/data/cell_lines(v0.6).pkl'  # Cell line pairs
 DATA_PATH = './tasks/data/drug(v0.6).pkl'  # For training (Pair scores)
-# DATA_PATH = './tasks/data/drug/drug(v0.1_graph).pkl' 
+# DATA_PATH = './tasks/data/drug/drug(v0.1_graph).pkl'
 DRUG_DIR = './tasks/data/drug/validation/'      # For validation (ex: tox21)
 #DRUG_FILES = ['BBBP_fingerprint_3.pkl',
 #              'clintox_fingerprint_3.pkl',
@@ -32,13 +32,14 @@ DRUG_DIR = './tasks/data/drug/validation/'      # For validation (ex: tox21)
 #              'tox21_fingerprint_3.pkl',
 #              'toxcast_fingerprint_3.pkl',]
 DRUG_FILES = ['drug(v0.5).pkl']
-PAIR_DIR = './tasks/data/pairs/'  # New pair data for scoring
+PAIR_DIR = './tasks/data/pairs/zinc/KKEB.csv'  # New pair data for scoring
+FP_DIR = './tasks/data/fingerprint_v0.6_py2.pkl'
 CKPT_DIR = './results/'
-MODEL_NAME = 'test.mdl'
+MODEL_NAME = 'model.mdl'
 
 
 def str2bool(v):
-    return v.lower() in ('yes', 'true', 't', '1', 'y')
+    return v.lower() in ('True', 'yes', 'true', 't', '1', 'y')
 
 
 
@@ -54,13 +55,17 @@ argparser.add_argument('--drug-files', type=str, default=DRUG_FILES,
                        help='Input drug file')
 argparser.add_argument('--pair-dir', type=str, default=PAIR_DIR,
                        help='Input new pairs')
+argparser.add_argument('--fp-dir', type=str, default=FP_DIR,
+                       help='Input new pairs')
 argparser.add_argument('--checkpoint-dir', type=str, default=CKPT_DIR,
                        help='Directory for model checkpoint')
 argparser.add_argument('--model-name', type=str, default=MODEL_NAME,
                        help='Model name for saving/loading')
 argparser.add_argument('--print-step', type=float, default=100,
                        help='Display steps')
-argparser.add_argument('--validation-step', type=float, default=100,
+argparser.add_argument('--validation-step', type=float, default=10,
+                       help='Number of random search validation')
+argparser.add_argument('--ensemble-step', type=float, default=10,
                        help='Number of random search validation')
 argparser.add_argument('--train', type='bool', default=True,
                        help='Enable training')
@@ -78,8 +83,12 @@ argparser.add_argument('--save-embed', type='bool', default=False,
                        help='Save embeddings with loaded model')
 argparser.add_argument('--save-prediction', type='bool', default=False,
                        help='Save predictions with loaded model')
+argparser.add_argument('--perform-ensemble', type='bool', default=False,
+                       help='perform-ensemble and save predictions with loaded model')
 argparser.add_argument('--save-pair-score', type='bool', default=False,
                        help='Save predictions with loaded model')
+argparser.add_argument('--save-pair-score-ensemble', type='bool', default=False,
+                      help='Save predictions with loaded model')
 argparser.add_argument('--top-only', type='bool', default=False,
                        help='Return top/bottom 10% results only')
 argparser.add_argument('--embed-d', type = int, default=1,
@@ -88,7 +97,7 @@ argparser.add_argument('--embed-d', type = int, default=1,
 # Train config
 argparser.add_argument('--batch-size', type=int, default=32)
 argparser.add_argument('--epoch', type=int, default=40)
-argparser.add_argument('--learning-rate', type=float, default=5e-4)
+argparser.add_argument('--learning-rate', type=float, default=0.005)
 argparser.add_argument('--weight-decay', type=float, default=0)
 argparser.add_argument('--grad-max-norm', type=int, default=10)
 argparser.add_argument('--grad-clip', type=int, default=10)
@@ -96,7 +105,7 @@ argparser.add_argument('--grad-clip', type=int, default=10)
 # Model config
 argparser.add_argument('--binary', type='bool', default=False)
 argparser.add_argument('--hidden-dim', type=int, default=512)
-argparser.add_argument('--drug-embed-dim', type=int, default=350)
+argparser.add_argument('--drug-embed-dim', type=int, default=300)
 argparser.add_argument('--lstm-layer', type=int, default=1)
 argparser.add_argument('--lstm-dr', type=float, default=0.0)
 argparser.add_argument('--char-dr', type=float, default=0.0)
@@ -106,7 +115,7 @@ argparser.add_argument('--char-embed-dim', type=int, default=20)
 argparser.add_argument('--s-idx', type=int, default=0)
 argparser.add_argument('--rep-idx', type=int, default=2)
 argparser.add_argument('--dist-fn', type=str, default='cos')
-argparser.add_argument('--seed', type=int, default=3)
+argparser.add_argument('--seed', type=int, default=None)
 
 #graph
 argparser.add_argument('--g_layer', type=int, default = 3)
@@ -117,17 +126,16 @@ argparser.add_argument('--g_dropout', type=float, default=0.0)
 args = argparser.parse_args()
 
 
-def run_experiment(model, dataset, run_fn, args, cell_line=None):
-
+def run_experiment(model, dataset, run_fn, args, cell_line):
+    print("Current Model: ", args.model_name)
     # Get dataloaders
     if cell_line is None:
         train_loader, valid_loader, test_loader = dataset.get_dataloader(
-            batch_size=args.batch_size, s_idx=args.s_idx) 
+            batch_size=args.batch_size, s_idx=args.s_idx)
     else:
         LOGGER.info('Training on {} cell line'.format(cell_line))
         train_loader, valid_loader, test_loader = dataset.get_cellloader(
             batch_size=args.batch_size, s_idx=args.s_idx, cell_line=cell_line)
-
 
     # Set metrics
     if args.binary:
@@ -137,7 +145,7 @@ def run_experiment(model, dataset, run_fn, args, cell_line=None):
     else:
         metric = np.corrcoef
         assert args.s_idx == 0
-    
+
     # Save embeddings and exit
     if args.save_embed:
         model.load_checkpoint(args.checkpoint_dir, args.model_name)
@@ -150,9 +158,9 @@ def run_experiment(model, dataset, run_fn, args, cell_line=None):
         else:
             for drug_file in args.drug_files:
                 drugs = pickle.load(open(args.drug_dir + drug_file, 'rb'))
-                save_embed(model, drugs, dataset, args, drug_file) 
+                save_embed(model, drugs, dataset, args, drug_file)
         sys.exit()
-    
+
     # Save predictions on test dataset and exit
     if args.save_prediction:
         model.load_checkpoint(args.checkpoint_dir, args.model_name)
@@ -160,12 +168,29 @@ def run_experiment(model, dataset, run_fn, args, cell_line=None):
         save_prediction(model, test_loader, dataset, args)
         sys.exit()
 
-    # Save pair predictions on pretrained model
-    if args.save_pair_score:
+    if args.perform_ensemble:
         model.load_checkpoint(args.checkpoint_dir, args.model_name)
         # run_fn(model, test_loader, dataset, args, metric, train=False)
-        save_pair_score(model, args.pair_dir, dataset, args)
-        sys.exit()
+        return perform_ensemble(model, test_loader, dataset, args)
+
+
+    # Save pair predictions on pretrained model
+    if args.save_pair_score:
+        if args.save_pair_score_ensemble:
+            models = [0,1,2,3,4,5,6,7,8,9]
+            for _model in models:
+                args.model_name = args.model_name.replace(args.model_name.split(".")[0], "test"+str(_model))
+                print(args.model_name)
+                model.load_checkpoint(args.checkpoint_dir, args.model_name)
+                # run_fn(model, test_loader, dataset, args, metric, train=False)
+                save_pair_score(model, args.pair_dir, args.fp_dir, dataset, args)
+            sys.exit()
+
+        else:
+            model.load_checkpoint(args.checkpoint_dir, args.model_name)
+            # run_fn(model, test_loader, dataset, args, metric, train=False)
+            save_pair_score(model, args.pair_dir, args.fp_dir, dataset, args)
+            sys.exit()
 
     # Save and load model during experiments
     if args.train:
@@ -183,7 +208,7 @@ def run_experiment(model, dataset, run_fn, args, cell_line=None):
 
             if args.valid:
                 LOGGER.info('Validation')
-                curr = run_fn(model, valid_loader, dataset, args, 
+                curr = run_fn(model, valid_loader, dataset, args,
                               metric, train=False)
                 if not args.resume and curr > best:
                     best = curr
@@ -195,13 +220,13 @@ def run_experiment(model, dataset, run_fn, args, cell_line=None):
                     #lr_dacay = 0
                 else:
                     converge_cnt += 1
-                   # lr_decay += 1                
+                   # lr_decay += 1
                 '''
                 if lr_decay >= 2:
                     old_lr = args.learning_rate
-                    args.learning_rate = 1/2 * args.learning_rate 
-                    print("lr_decay from %.3f to %.3f" % (old_lr, args.learning_rate))
-                    lr_decay = 0 
+                    args.learning_rate = 1/2 * args.learning_rate
+                    print("lr_decay from %.5f to %.5f" % (old_lr, args.learning_rate))
+                    lr_decay = 0
                 '''
                 if converge_cnt >= 3:
                     for param_group in model.optimizer.param_groups:
@@ -215,7 +240,7 @@ def run_experiment(model, dataset, run_fn, args, cell_line=None):
                 if adaptive_cnt > 3:
                     LOGGER.info('Early stopping applied')
                     break
-    
+
     if args.test:
         LOGGER.info('Performance Test on Valid & Test Set')
         if args.train or args.resume:
@@ -239,7 +264,7 @@ def get_model(args, dataset):
     dataset.set_rep(args.rep_idx)
     if args.rep_idx == 4:
         model = DrugModel(input_dim=dataset.input_dim,
-                          output_dim=1, 
+                          output_dim=1,
                           hidden_dim=args.hidden_dim,
                           drug_embed_dim=args.drug_embed_dim,
                           lstm_layer=args.lstm_layer,
@@ -259,10 +284,10 @@ def get_model(args, dataset):
                           g_hidden_dim=args.g_hidden_dim,
                           g_out_dim=args.g_out_dim,
                           g_dropout=args.g_dropout).cuda()
-                            
+
     else:
         model = DrugModel(input_dim=dataset.input_dim,
-                          output_dim=1, 
+                          output_dim=1,
                           hidden_dim=args.hidden_dim,
                           drug_embed_dim=args.drug_embed_dim,
                           lstm_layer=args.lstm_layer,
@@ -320,6 +345,7 @@ def init_parameters(args, model_name, model_idx, cell_line='Total'):
 
 
 def main():
+
     # Initialize logging and prepare seed
     init_logging(args)
     LOGGER.info('COMMAND: {}'.format(' '.join(sys.argv)))
@@ -327,11 +353,14 @@ def main():
     # Get datset, run function, model
     dataset = get_dataset(args.data_path)
     run_fn = get_run_fn(args)
-    model_name = args.model_name
+    cell_line = None
 
-    # Random search validation
-    for model_idx in range(args.validation_step):
-        LOGGER.info('Validation step {}'.format(model_idx+1))
+    #args.perform_ensemble = True
+    #print(args.top_only)
+
+
+    if args.save_pair_score:
+        LOGGER.info('save_pair_score step')
         init_seed(args.seed)
         # init_parameters(args, model_name, model_idx)
         # LOGGER.info(args)
@@ -340,19 +369,75 @@ def main():
         model = get_model(args, dataset)
 
         # Run experiment
-        run_experiment(model, dataset, run_fn, args)
+        run_experiment(model, dataset, run_fn, args, cell_line)
 
-        '''
-        for cell_line in dataset.cell_lines:
-            init_parameters(args, model_name, model_idx, cell_line)
-            LOGGER.info(args)
+    elif args.perform_ensemble:
+        print("LET'S PERFORM ENSEMBLE!")
+        ensemble_preds = []
+        kk_ensemble_preds = []
+        ku_ensemble_preds = []
+        uu_ensemble_preds = []
+
+        for model_idx in range(args.ensemble_step):
+            LOGGER.info('Ensemble step {}'.format(model_idx+1))
+            init_seed(args.seed)
+
+            model = get_model(args, dataset)
+            args.model_name = args.model_name.replace(args.model_name.split(".")[0], "test"+str(model_idx))
+            pred_set, tar_set, kk_pred_set, kk_tar_set, ku_pred_set, ku_tar_set, uu_pred_set, uu_tar_set = run_experiment(model, dataset, run_fn, args, cell_line)
+
+            ensemble_preds.append(pred_set)
+            kk_ensemble_preds.append(kk_pred_set)
+            ku_ensemble_preds.append(ku_pred_set)
+            uu_ensemble_preds.append(uu_pred_set)
+
+            print(pred_set[:10])
+            print(tar_set[:10])
+
+
+        #ensemble average
+        ensemble_pred = np.array(ensemble_preds).mean(axis=0)
+        kk_ensemble_pred = np.array(kk_ensemble_preds).mean(axis=0)
+        ku_ensemble_pred = np.array(ku_ensemble_preds).mean(axis=0)
+        uu_ensemble_pred = np.array(uu_ensemble_preds).mean(axis=0)
+
+        print(ensemble_pred[:10])
+        print(tar_set[:10])
+
+
+
+        print("\n\nEnsemble Results")
+        corr, msetotal, mse1, mse2, mse5, auroc, precision1, precision2, precision5 = evaluation(ensemble_pred, tar_set)
+        print('[TOTAL\t{:.5f}\t{:.5f}\t{:.5f}\t{:.5f}\t{:.5f}\t{:.5f}\t{:.5f}\t{:.5f}\t{:.5f}] '.format(
+            corr, msetotal, mse1, mse2, mse5, auroc, precision1, precision2, precision5))
+
+        corr, msetotal, mse1, mse2, mse5, auroc, precision1, precision2, precision5 = evaluation(kk_ensemble_pred, kk_tar_set)
+        print('[KK\t{:.5f}\t{:.5f}\t{:.5f}\t{:.5f}\t{:.5f}\t{:.5f}\t{:.5f}\t{:.5f}\t{:.5f}] '.format(
+            corr, msetotal, mse1, mse2, mse5, auroc, precision1, precision2, precision5))
+
+        corr, msetotal, mse1, mse2, mse5, auroc, precision1, precision2, precision5 = evaluation(ku_ensemble_pred, ku_tar_set)
+        print('[KU\t{:.5f}\t{:.5f}\t{:.5f}\t{:.5f}\t{:.5f}\t{:.5f}\t{:.5f}\t{:.5f}\t{:.5f}] '.format(
+            corr, msetotal, mse1, mse2, mse5, auroc, precision1, precision2, precision5))
+
+        corr, msetotal, mse1, mse2, mse5, auroc, precision1, precision2, precision5 = evaluation(uu_ensemble_pred, uu_tar_set)
+        print('[UU\t{:.5f}\t{:.5f}\t{:.5f}\t{:.5f}\t{:.5f}\t{:.5f}\t{:.5f}\t{:.5f}\t{:.5f}] '.format(
+            corr, msetotal, mse1, mse2, mse5, auroc, precision1, precision2, precision5))
+
+    else:
+        print("LET'S PERFORM VALIDATION!")
+        # Random search validation
+        for model_idx in range(args.validation_step):
+            LOGGER.info('Validation step {}'.format(model_idx+1))
+            init_seed(args.seed)
+            # init_parameters(args, model_name, model_idx)
+            # LOGGER.info(args)
 
             # Get model
             model = get_model(args, dataset)
+            args.model_name = args.model_name.replace(args.model_name.split(".")[0], "test"+str(model_idx))
+
+            # Run experiment
             run_experiment(model, dataset, run_fn, args, cell_line)
-        '''
-
-
 
 if __name__ == '__main__':
     main()

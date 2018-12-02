@@ -86,8 +86,8 @@ class DrugDataset(object):
                 drug = row[PERT_IDX]
                 smiles = row[SMILES_IDX]
                 inchikey = row[INCHIKEY_IDX]
-                drugs[drug] = [smiles, inchikey] 
-                
+                drugs[drug] = [smiles, inchikey]
+
                 # Update drug characters
                 list(map(lambda x: self.register_schar(x), smiles))
                 list(map(lambda x: self.register_ichar(x), inchikey))
@@ -97,14 +97,14 @@ class DrugDataset(object):
                         if self.schar_maxlen > len(smiles) else len(smiles)
                 self.ichar_maxlen = self.ichar_maxlen \
                         if self.ichar_maxlen > len(inchikey) else len(inchikey)
-        
+
         print('Drug dictionary size {}'.format(len(drugs)))
         print('Smiles char size {}'.format(len(self.schar2idx)))
         print('Smiles maxlen {}'.format(self.schar_maxlen))
         print('Inchikey char size {}'.format(len(self.ichar2idx)))
         print('Inchikey maxlen {}\n'.format(self.ichar_maxlen))
         return drugs
-    
+
     def process_cell_lines(self, path):
         cell_pairs = pickle.load(open(path, 'rb'))
         new_datasets = {}
@@ -132,7 +132,7 @@ class DrugDataset(object):
                 self.known[d2] = 0
 
         return new_datasets
-    
+
     def append_drug_sub(self, paths, drugs):
         for path in paths:
             print('### Drug subID appending {}'.format(path))
@@ -160,7 +160,7 @@ class DrugDataset(object):
                     print(row)
                     print('REG: {}, BI: {}'.format(row[REG_IDX], row[BI_IDX]))
                     continue
-                
+
                 # Save drugs, score (real-valued), target (binary)
                 drug1 = row[1]
                 drug2 = row[2]
@@ -173,7 +173,7 @@ class DrugDataset(object):
 
         print('Dataset size {}\n'.format(len(pair_scores)))
         return pair_scores
-    
+
     def split_dataset(self, pair_scores, unk_test=True):
         print('### Split dataset')
 
@@ -204,7 +204,7 @@ class DrugDataset(object):
         # If either one is unknown, add to test or valid
         for drug1, drug2, scores in pair_scores:
             if drug1 in self.unknown or drug2 in self.unknown:
-                is_test = np.random.binomial(1, 
+                is_test = np.random.binomial(1,
                                 self.SR[2]/(self.SR[1]+self.SR[2]))
 
                 if is_test:
@@ -227,7 +227,7 @@ class DrugDataset(object):
 
                 if len(train) < len(pair_scores) * self.SR[0]:
                     train.append([drug1, drug2, scores])
-                elif len(valid) < len(pair_scores) * self.SR[1]: 
+                elif len(valid) < len(pair_scores) * self.SR[1]:
                     valid.append([drug1, drug2, scores])
                     valid_kk += 1
                 else:
@@ -244,14 +244,14 @@ class DrugDataset(object):
     def get_cellloader(self, batch_size=32, shuffle=True, num_workers=5, s_idx=0,
                        cell_line='PC3'):
 
-        train_dataset = Representation(self.cell_datasets[cell_line]['tr'], 
-                                       self.drugs, 
+        train_dataset = Representation(self.cell_datasets[cell_line]['tr'],
+                                       self.drugs,
                                        self._rep_idx, s_idx=s_idx)
-    
+
         train_sampler = SortedBatchSampler(train_dataset.lengths(),
                                            batch_size,
                                            shuffle=True)
-    
+
         train_loader = torch.utils.data.DataLoader(
             train_dataset,
             batch_size=batch_size,
@@ -260,9 +260,9 @@ class DrugDataset(object):
             collate_fn=self.collate_fn,
             pin_memory=True,
         )
-        
-        valid_dataset = Representation(self.cell_datasets[cell_line]['va'], 
-                                       self.drugs, 
+
+        valid_dataset = Representation(self.cell_datasets[cell_line]['va'],
+                                       self.drugs,
                                         self._rep_idx, s_idx=s_idx)
         valid_sampler = SortedBatchSampler(valid_dataset.lengths(),
                                            batch_size,
@@ -274,9 +274,10 @@ class DrugDataset(object):
             num_workers=num_workers,
             collate_fn=self.collate_fn,
             pin_memory=True,
+            shuffle=False,
         )
 
-        test_dataset = Representation(self.cell_datasets[cell_line]['te'], 
+        test_dataset = Representation(self.cell_datasets[cell_line]['te'],
                                       self.drugs,
                                       self._rep_idx, s_idx=s_idx)
         test_sampler = SortedBatchSampler(test_dataset.lengths(),
@@ -289,6 +290,7 @@ class DrugDataset(object):
             num_workers=num_workers,
             collate_fn=self.collate_fn,
             pin_memory=True,
+            shuffle=False,
         )
 
         return train_loader, valid_loader, test_loader
@@ -333,15 +335,15 @@ class DrugDataset(object):
         drug1_reps = Variable(drug1_reps)
         drug2_reps = Variable(drug2_reps)
         scores = Variable(scores)
-         
-        return (drug1_raws, drug1_reps, drug1_lens, 
+
+        return (drug1_raws, drug1_reps, drug1_lens,
                 drug2_raws, drug2_reps, drug2_lens, scores)
 
     def get_dataloader(self, batch_size=32, shuffle=True, num_workers=5, s_idx=0):
         if self._rep_idx == 4:
-            train_dataset = Rep_graph(self.dataset['tr'], self.drugs, 
+            train_dataset = Rep_graph(self.dataset['tr'], self.drugs,
                                     s_idx=s_idx)
-            
+
             train_sampler = SortedBatchSampler(train_dataset.lengths(),
                                                batch_size, shuffle = True)
             train_loader = torch.utils.data.DataLoader(
@@ -354,13 +356,13 @@ class DrugDataset(object):
            )
 
         else:
-            train_dataset = Representation(self.dataset['tr'], self.drugs, 
+            train_dataset = Representation(self.dataset['tr'], self.drugs,
                                          self._rep_idx, s_idx=s_idx)
-        
+
             train_sampler = SortedBatchSampler(train_dataset.lengths(),
                                                batch_size,
                                                shuffle=True)
-        
+
             train_loader = torch.utils.data.DataLoader(
                 train_dataset,
                 batch_size=batch_size,
@@ -372,11 +374,11 @@ class DrugDataset(object):
         if self._rep_idx == 4:
             valid_dataset = Rep_graph(self.dataset['va'], self.drugs,
                                     s_idx = s_idx)
-            
+
             valid_sampler = SortedBatchSampler(valid_dataset.lengths(),
                                                batch_size,
                                                shuffle=False)
-            
+
             valid_loader = torch.utils.data.DataLoader(
                 valid_dataset,
                 batch_size=batch_size,
@@ -384,12 +386,13 @@ class DrugDataset(object):
                 num_workers=num_workers,
                 collate_fn=self.collate_fn_graph,
                 pin_memory=True,
+                shuffle=False,
             )
 
 
-        
+
         else:
-            valid_dataset = Representation(self.dataset['va'], self.drugs, 
+            valid_dataset = Representation(self.dataset['va'], self.drugs,
                                           self._rep_idx, s_idx=s_idx)
             valid_sampler = SortedBatchSampler(valid_dataset.lengths(),
                                                batch_size,
@@ -401,16 +404,17 @@ class DrugDataset(object):
                 num_workers=num_workers,
                 collate_fn=self.collate_fn,
                 pin_memory=True,
+                shuffle=False,
             )
 
         if self._rep_idx ==4:
             test_dataset = Rep_graph(self.dataset['te'], self.drugs,
                                     s_idx = s_idx)
-        
+
             test_sampler = SortedBatchSampler(test_dataset.lengths(),
                                                batch_size,
                                                shuffle=False)
-            
+
             test_loader = torch.utils.data.DataLoader(
                 test_dataset,
                 batch_size=batch_size,
@@ -418,8 +422,9 @@ class DrugDataset(object):
                 num_workers=num_workers,
                 collate_fn=self.collate_fn_graph,
                 pin_memory=True,
+                shuffle=False,
             )
-        
+
         else:
             test_dataset = Representation(self.dataset['te'], self.drugs,
                                            self._rep_idx, s_idx=s_idx)
@@ -429,11 +434,13 @@ class DrugDataset(object):
             test_loader = torch.utils.data.DataLoader(
                 test_dataset,
                 batch_size=batch_size,
-                sampler=test_sampler,
+                sampler=None,
                 num_workers=num_workers,
                 collate_fn=self.collate_fn,
                 pin_memory=True,
+                shuffle=False,
             )
+
 
         return train_loader, valid_loader, test_loader
 
@@ -477,15 +484,15 @@ class DrugDataset(object):
         drug1_reps = Variable(drug1_reps)
         drug2_reps = Variable(drug2_reps)
         scores = Variable(scores)
-         
-        return (drug1_raws, drug1_reps, drug1_lens, 
+
+        return (drug1_raws, drug1_reps, drug1_lens,
                 drug2_raws, drug2_reps, drug2_lens, scores)
-       
+
     def normalize(self, mx):
         rowsum = np.sum(mx, axis=1).astype(float)
         rowinvs = []
         for idx, x in enumerate(rowsum):
-            rowinv = 1/x if x != 0 else 0 
+            rowinv = 1/x if x != 0 else 0
             rowinvs.append(rowinv)
         r_mat_inv = np.diag(rowinvs)
         mx = r_mat_inv.dot(mx)
@@ -530,7 +537,7 @@ class DrugDataset(object):
             drug2_feature = torch.FloatTensor(drug2_feature)
             drug2_adj = np.array(drug2_adj) + np.eye(len(drug2_adj))
             #drug2_adj = self.normalize(np.array(drug2_adj)+ np.eye(len(drug2_adj)))
-            
+
             if len(drug2_adj) < drug2_maxlen:
                 pad_length = drug2_maxlen - len(drug2_adj)
                 pad = np.zeros((len(drug2_adj), pad_length))
@@ -539,15 +546,15 @@ class DrugDataset(object):
             drug2_features[idx, :drug2_feature.size(0)].copy_(drug2_feature)
             drug2_adjs[idx, :drug2_adj.size(0)].copy_(drug2_adj)
             scores[idx] = ex[8]
-            
+
         drug1_features = Variable(drug1_features)
         drug1_adjs = Variable(drug1_adjs)
         drug2_features = Variable(drug2_features)
         drug2_adjs = Variable(drug2_adjs)
         scores = Variable(scores)
 
-        return (drug1_raws, drug1_features, drug1_adjs, drug1_lens, 
-                drug2_raws, drug2_features, drug2_adjs, drug2_lens, 
+        return (drug1_raws, drug1_features, drug1_adjs, drug1_lens,
+                drug2_raws, drug2_features, drug2_adjs, drug2_lens,
                 scores)
 
 
@@ -573,11 +580,11 @@ class DrugDataset(object):
         print('Drug1 : {} \n adj : {} \n num_node: {}'.format(d1_f, d1_a, d1_l))
         print('Drug2 : {} \n adj : {} \n num_node: {}'.format(d2_f, d2_a, d2_l))
         print('Score : {} \n'.format(score.data[0]))
-    
+
     # rep_idx [0, 1, 2, 3]
     def set_rep(self, rep_idx):
         self._rep_idx = rep_idx
-    
+
     @property
     def char2idx(self):
         if self._rep_idx == 0:
@@ -585,7 +592,7 @@ class DrugDataset(object):
         elif self._rep_idx == 1:
             return self.ichar2idx
         else:
-            return {}  
+            return {}
 
     @property
     def idx2char(self):
@@ -642,10 +649,10 @@ class Representation(Dataset):
 
         # Choose drug representation
         drug1_rep = self.drugs[drug1][self.rep_idx]
-        drug1_len = len(drug1_rep)          
+        drug1_len = len(drug1_rep)
         drug2_rep = self.drugs[drug2][self.rep_idx]
-        drug2_len = len(drug2_rep)          
-        
+        drug2_len = len(drug2_rep)
+
         # Inchi None check
         if self.rep_idx == 1:
             assert drug1_rep != 'None' and drug2_rep != 'None'
@@ -657,7 +664,7 @@ class Representation(Dataset):
         else:
             score = score / 100.
         return drug1, drug1_rep, drug1_len, drug2, drug2_rep, drug2_len, score
-    
+
     def lengths(self):
         def get_longer_length(ex):
             drug1_len = len(self.drugs[ex[0]][self.rep_idx])
@@ -676,7 +683,7 @@ class SortedBatchSampler(Sampler):
     def __iter__(self):
         lengths = np.array(
             [(l1, l2, l3, np.random.random()) for l1, l2, l3 in self.lengths],
-            dtype=[('l1', np.int_), ('l2', np.int_), ('l3', np.int_), 
+            dtype=[('l1', np.int_), ('l2', np.int_), ('l3', np.int_),
                    ('rand', np.float_)]
         )
         indices = np.argsort(lengths, order=('l1', 'rand'))
@@ -685,7 +692,7 @@ class SortedBatchSampler(Sampler):
         if self.shuffle:
             np.random.shuffle(batches)
         return iter([i for batch in batches for i in batch])
-    
+
     def __len__(self):
         return len(self.lengths)
 
@@ -695,7 +702,7 @@ class Rep_graph(Dataset):
         self.drugs = drugs
         self.s_idx = s_idx
         self.rep_idx = 4
-    
+
     def __len__(self):
         return len(self.examples)
 
@@ -722,7 +729,7 @@ class Rep_graph(Dataset):
         else:
             score = score/100
 
-        return (drug1, drug1_feature, drug1_adj, drug1_node, 
+        return (drug1, drug1_feature, drug1_adj, drug1_node,
                 drug2, drug2_feature, drug2_adj, drug2_node, score)
 
     def lengths(self):
@@ -735,14 +742,14 @@ class Rep_graph(Dataset):
 """
 [Version Note]
     v0.1: basic implementation
-        key A, key B, char: 9165/5677/27 
+        key A, key B, char: 9165/5677/27
         key set: 20337
         train:
-        valid: 
-        test: 
+        valid:
+        test:
     v0.2: unknown / known split
     v0.3: append sub ids
-    
+
 
 drug_info_1.0.csv
 - (drug_id, smiles, inchikey, target)
@@ -770,9 +777,9 @@ def init_seed(seed=None):
 if __name__ == '__main__':
     init_seed(1004)
 
-    # Dataset configuration 
+    # Dataset configuration
     drug_id_path = './data/drug/drug_info_2.0.csv'
-    drug_sub_path = ['./data/drug/drug_fingerprint_2.0_p2.pkl', 
+    drug_sub_path = ['./data/drug/drug_fingerprint_2.0_p2.pkl',
                     './data/drug/drug_mol2vec_2.0_p2.pkl', ]
                     # './data/drug/drug_2.0_graph_features.pkl']
     # drug_pair_path = './data/drug/drug_cscore_pair_0.7.csv'
@@ -789,7 +796,7 @@ if __name__ == '__main__':
     else:
         print('## Load preprocess %s' % load_path)
         dataset = pickle.load(open(load_path, 'rb'))
-   
+
     # Loader testing
     dataset.set_rep(rep_idx=1)
     graph = False
@@ -811,4 +818,3 @@ if __name__ == '__main__':
                     dataset.get_cellloader(batch_size=3600, s_idx=0, cell_line=cell)[1]):
                 dataset.decode_data(d1_r[0], d1_l[0], d2_r[0], d2_l[0], score[0])
                 pass
-
