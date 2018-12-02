@@ -178,8 +178,10 @@ def run_experiment(model, dataset, run_fn, args, cell_line):
     if args.save_pair_score:
         if args.save_pair_score_ensemble:
             models = [0,1,2,3,4,5,6,7,8,9]
+            model_name = args.model_name.split(".")[0]
             for _model in models:
-                args.model_name = args.model_name.replace(args.model_name.split(".")[0], "test"+str(_model))
+                print(model_name, _model)
+                args.model_name = model_name+str(_model)+".mdl"
                 print(args.model_name)
                 model.load_checkpoint(args.checkpoint_dir, args.model_name)
                 # run_fn(model, test_loader, dataset, args, metric, train=False)
@@ -355,10 +357,6 @@ def main():
     run_fn = get_run_fn(args)
     cell_line = None
 
-    #args.perform_ensemble = True
-    #print(args.top_only)
-
-
     if args.save_pair_score:
         LOGGER.info('save_pair_score step')
         init_seed(args.seed)
@@ -378,12 +376,15 @@ def main():
         ku_ensemble_preds = []
         uu_ensemble_preds = []
 
+        model_name = args.model_name.split(".")[0]
         for model_idx in range(args.ensemble_step):
             LOGGER.info('Ensemble step {}'.format(model_idx+1))
             init_seed(args.seed)
 
             model = get_model(args, dataset)
-            args.model_name = args.model_name.replace(args.model_name.split(".")[0], "test"+str(model_idx))
+            print(model_name, _model)
+            args.model_name = model_name+str(model_idx)+".mdl"
+            print(args.model_name)
             pred_set, tar_set, kk_pred_set, kk_tar_set, ku_pred_set, ku_tar_set, uu_pred_set, uu_tar_set = run_experiment(model, dataset, run_fn, args, cell_line)
 
             ensemble_preds.append(pred_set)

@@ -539,6 +539,70 @@ def perform_ensemble(model, loader, dataset, args):
 # Outputs pred scores for new pair dataset
 def save_pair_score(model, pair_dir, fp_dir, dataset, args):
     model.eval()
+    csv_writer = csv.writer(open(args.checkpoint_dir + 'prediction2_zinc_' +
+                                 args.model_name + '.csv', 'w'))
+    csv_writer.writerow(['drug1', 'drug2', 'prediction', 'jaccard'])
+
+    drug2rep = pickle.load(open(fp_dir, 'rb'))
+
+    for subdir, _, files in os.walk(pair_dir):
+        for file_ in sorted(files):
+
+            df = pd.read_csv(os.path.join(subdir, file_), sep=",")
+            #print(df)
+            LOGGER.info('save_pair_score processing {}...'.format(file_))
+
+            batch = []
+            for row_idx, row in df.iterrows():
+                drug1 = row['id1']
+                drug1_r = drug2rep[drug1][0]
+                drug1_r = [float(value) for value in list(drug1_r)]
+
+                drug2 = row['id2']
+                drug2_r = drug2rep[drug2][0]
+                drug2_r = [float(value) for value in list(drug2_r)]
+
+                example = [drug1, drug1_r, len(drug1_r),
+                           drug2, drug2_r, len(drug2_r), 0]
+                batch.append(example)
+
+                if len(batch) == 1024:
+                    inputs = dataset.collate_fn(batch)
+                    outputs, _, _ = model(inputs[1].cuda(), inputs[2], inputs[4].cuda(), inputs[5], None, None)
+                    predictions = outputs.data.cpu().numpy()
+
+                    for example, pred in zip(batch, predictions):
+                        from scipy.spatial import distance
+                        def jaccard(a, b):
+                           return 1-distance.jaccard(a, b)
+                        jac = jaccard(example[1], example[4])
+
+                        csv_writer.writerow([example[0], example[3], pred, jac])
+                        print(example[0], example[3], pred, jac)
+
+                    batch = []
+
+                # Print progress
+                if row_idx % 5000 == 0 or row_idx == len(df) - 1:
+                    _progress = '{}/{} saving unknwon predictions..'.format(
+                        row_idx + 1, len(df))
+                    LOGGER.info(_progress)
+
+            if len(batch) > 0:
+                inputs = dataset.collate_fn(batch)
+                outputs, _, _ = model(inputs[1].cuda(), inputs[2], inputs[4].cuda(), inputs[5], None, None)
+                predictions = outputs.data.cpu().numpy()
+
+                for example, pred in zip(batch, predictions):
+                    from scipy.spatial import distance
+                    def jaccard(a, b):
+                       return 1-distance.jaccard(a, b)
+                    jac = jaccard(example[1], example[4])
+                    csv_writer.writerow([example[0], example[3], pred, jac])
+
+
+def save_pair_score_for_target_drugs(model, pair_dir, fp_dir, dataset, args):
+    model.eval()
     csv_writer = csv.writer(open(args.checkpoint_dir + 'prediction_zinc_' +
                                  args.model_name + '.csv', 'w'))
     csv_writer.writerow(['drug1', 'drug2', 'prediction', 'jaccard'])
@@ -594,69 +658,6 @@ def save_pair_score(model, pair_dir, fp_dir, dataset, args):
 
                 # Print progress
                 if row_idx % 100 == 0 or row_idx == len(df) - 1:
-                    _progress = '{}/{} saving unknwon predictions..'.format(
-                        row_idx + 1, len(df))
-                    LOGGER.info(_progress)
-
-            if len(batch) > 0:
-                inputs = dataset.collate_fn(batch)
-                outputs, _, _ = model(inputs[1].cuda(), inputs[2], inputs[4].cuda(), inputs[5], None, None)
-                predictions = outputs.data.cpu().numpy()
-
-                for example, pred in zip(batch, predictions):
-                    from scipy.spatial import distance
-                    def jaccard(a, b):
-                       return 1-distance.jaccard(a, b)
-                    jac = jaccard(example[1], example[4])
-                    csv_writer.writerow([example[0], example[3], pred, jac])
-
-def save_pair_score2(model, pair_dir, fp_dir, dataset, args):
-    model.eval()
-    csv_writer = csv.writer(open(args.checkpoint_dir + 'prediction2_zinc_' +
-                                 args.model_name + '.csv', 'w'))
-    csv_writer.writerow(['drug1', 'drug2', 'prediction', 'jaccard'])
-
-    drug2rep = pickle.load(open(fp_dir, 'rb'))
-
-    for subdir, _, files in os.walk(pair_dir):
-        for file_ in sorted(files):
-
-            df = pd.read_csv(os.path.join(subdir, file_), sep=",")
-            #print(df)
-            LOGGER.info('save_pair_score processing {}...'.format(file_))
-
-            batch = []
-            for row_idx, row in df.iterrows():
-                drug1 = row['id1']
-                drug1_r = drug2rep[drug1][0]
-                drug1_r = [float(value) for value in list(drug1_r)]
-
-                drug2 = row['id2']
-                drug2_r = drug2rep[drug2][0]
-                drug2_r = [float(value) for value in list(drug2_r)]
-
-                example = [drug1, drug1_r, len(drug1_r),
-                           drug2, drug2_r, len(drug2_r), 0]
-                batch.append(example)
-
-                if len(batch) == 1024:
-                    inputs = dataset.collate_fn(batch)
-                    outputs, _, _ = model(inputs[1].cuda(), inputs[2], inputs[4].cuda(), inputs[5], None, None)
-                    predictions = outputs.data.cpu().numpy()
-
-                    for example, pred in zip(batch, predictions):
-                        from scipy.spatial import distance
-                        def jaccard(a, b):
-                           return 1-distance.jaccard(a, b)
-                        jac = jaccard(example[1], example[4])
-
-                        csv_writer.writerow([example[0], example[3], pred, jac])
-                        print(example[0], example[3], pred, jac)
-
-                    batch = []
-
-                # Print progress
-                if row_idx % 5000 == 0 or row_idx == len(df) - 1:
                     _progress = '{}/{} saving unknwon predictions..'.format(
                         row_idx + 1, len(df))
                     LOGGER.info(_progress)
